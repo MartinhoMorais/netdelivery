@@ -63,7 +63,7 @@ namespace Net.Delivery.Order.Notifier
                         {
                             try
                             {
-                                var consumeResult = consumer.Consume(cts.Token);
+                                var consumeResult = consumer.Consume(cts.Token);// para realizar commit na hora e não deixar mesagem consumida se commit
 
                                 Domain.Entities.Order order = JsonSerializer.Deserialize<Domain.Entities.Order>(consumeResult.Message.Value);
 
