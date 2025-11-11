@@ -43,64 +43,68 @@ O provedor externo envia um **callback HTTP POST** com os dados do pagamento, e 
   "Amount": 150.75,
   "Timestamp": "2025-11-11T13:45:00Z"
 }
+```
 
-** Resposta:
+**Resposta:**
 ```json
 {
   "message": "Callback recebido com sucesso"
 }
+```
+
+**🧠 Fluxo de execução**
+- Provedor envia POST /api/payment/confirm.
+
+- PaymentCallbackController.Receive() valida assinatura.
+
+- PaymentProcessor processa o callback.
+
+- EmailService.SendPaymentConfirmation() é chamado.
+
+- Log é gravado no banco (EmailSent = true).
+
+- Retorna HTTP 200 OK.
 
 
-##---
-	🧠 Fluxo de execução
+**🧰 Dependências utilizadas**
 
-	Provedor envia POST /api/payment/confirm.
+- Microsoft.Extensions.Logging
 
-	PaymentCallbackController.Receive() valida assinatura.
+- System.Net.Mail (envio de e-mail SMTP)
 
-	PaymentProcessor processa o callback.
+- Microsoft.Extensions.Options (para configuração de SMTP)
 
-	EmailService.SendPaymentConfirmation() é chamado.
+- Newtonsoft.Json (serialização de payload, se necessário)
 
-	Log é gravado no banco (EmailSent = true).
+**Logs**
+- Nível	Mensagem	Contexto
+- Information	"Callback recebido"	Controller
+- Information	"E-mail de confirmação enviado"	EmailService
+- Error	"Falha ao enviar e-mail"	EmailService
+- Warning	"Assinatura inválida"	Controller
 
-	Retorna HTTP 200 OK.
 
-	🧰 Dependências utilizadas
+**⚠️ Exceções tratadas**
 
-	Microsoft.Extensions.Logging
+- SmtpException → Tentativa de reenvio configurada até 3 vezes.
 
-	System.Net.Mail (envio de e-mail SMTP)
+- UnauthorizedAccessException → Retorna 401 Unauthorized se X-Signature inválido.
 
-	Microsoft.Extensions.Options (para configuração de SMTP)
+- sonSerializationException → Retorna 400 Bad Request se payload inválido.
 
-	Newtonsoft.Json (serialização de payload, se necessário)
 
-	🪵 Logs
-	Nível	Mensagem	Contexto
-	Information	"Callback recebido"	Controller
-	Information	"E-mail de confirmação enviado"	EmailService
-	Error	"Falha ao enviar e-mail"	EmailService
-	Warning	"Assinatura inválida"	Controller
-	⚠️ Exceções tratadas
+**🧪 Testes relacionados**
 
-	SmtpException → Tentativa de reenvio configurada até 3 vezes.
+- PaymentCallbackControllerTests.Receive_ShouldReturnOk_WhenValidPayload()
 
-	UnauthorizedAccessException → Retorna 401 Unauthorized se X-Signature inválido.
+- EmailServiceTests.SendPaymentConfirmation_ShouldSendEmailSuccessfully()
 
-	JsonSerializationException → Retorna 400 Bad Request se payload inválido.
+- PaymentProcessorTests.Should_Log_And_Send_Email_When_Payment_Is_Paid()
 
-	🧪 Testes relacionados
 
-	PaymentCallbackControllerTests.Receive_ShouldReturnOk_WhenValidPayload()
+**📚 Configurações adicionadas**
 
-	EmailServiceTests.SendPaymentConfirmation_ShouldSendEmailSuccessfully()
-
-	PaymentProcessorTests.Should_Log_And_Send_Email_When_Payment_Is_Paid()
-
-📚 Configurações adicionadas
-
-appsettings.json:
+```appsettings.json:
 
 "EmailSettings": {
   "SmtpServer": "smtp.mailtrap.io",
@@ -109,3 +113,4 @@ appsettings.json:
   "Password": "pass",
   "From": "no-reply@empresa.com"
 }
+```
