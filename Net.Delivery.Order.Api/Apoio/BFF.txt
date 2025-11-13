@@ -1,4 +1,7 @@
-﻿bff.projeto.sln
+﻿
+https://jsonplaceholder.typicode.com/guide/
+
+bff.projeto.sln
 │
 ├── bff.projeto.API
 │   ├── Controllers
