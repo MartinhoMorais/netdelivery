@@ -1,0 +1,158 @@
+﻿Perfeito 👌 — então vamos adaptar o seu ExceptionHandlingMiddleware para funcionar em conjunto com o padrão ApiResponse que você já usa (com as propriedades Sucesso, Erros, Alertas, Conteudo).
+
+Essa versão será robusta e padronizada para capturar:
+
+Erros de domínio ou de validação
+
+Exceções genéricas (Exception)
+
+Falhas de APIs externas (ExternalApiException)
+
+Problemas de autenticação, timeout ou comunicação
+
+🧩 Estrutura recomendada
+
+📁 bff.projeto.API/Middlewares/
+
+ExceptionHandlingMiddleware.cs
+
+
+📁 bff.projeto.API/Models/Response/
+
+ApiResponse.cs
+
+🧱 ApiResponse.cs
+
+(Se já existir, pode manter — este é o formato base para referência)
+
+namespace bff.projeto.API.Models.Response;
+
+public class ApiResponse<T>
+{
+    public bool Sucesso { get; init; }
+    public T? Conteudo { get; init; }
+    public List<string> Erros { get; init; } = new();
+    public List<string> Alertas { get; init; } = new();
+
+    public static ApiResponse<T> Ok(T conteudo) => new() { Sucesso = true, Conteudo = conteudo };
+
+    public static ApiResponse<T> Falha(params string[] erros) => new()
+    {
+        Sucesso = false,
+        Erros = erros.ToList()
+    };
+}
+
+⚙️ ExceptionHandlingMiddleware.cs
+using System.Net;
+using bff.projeto.API.Models.Response;
+using bff.projeto.Infra.HttpClients; // para ExternalApiException
+using System.Text.Json;
+
+namespace bff.projeto.API.Middlewares;
+
+public class ExceptionHandlingMiddleware
+{
+    private readonly RequestDelegate _next;
+    private readonly ILogger<ExceptionHandlingMiddleware> _logger;
+
+    public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
+    {
+        _next = next;
+        _logger = logger;
+    }
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        try
+        {
+            await _next(context);
+        }
+        catch (ExternalApiException ex)
+        {
+            _logger.LogWarning(ex, "Erro ao comunicar com API externa");
+
+            var response = ApiResponse<string>.Falha($"Falha na comunicação com serviço externo: {ex.Message}");
+            await WriteResponseAsync(context, response, ex.StatusCode);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Acesso não autorizado");
+
+            var response = ApiResponse<string>.Falha("Acesso negado. Verifique suas credenciais.");
+            await WriteResponseAsync(context, response, HttpStatusCode.Unauthorized);
+        }
+        catch (OperationCanceledException)
+        {
+            var response = ApiResponse<string>.Falha("Operação cancelada ou expirada.");
+            await WriteResponseAsync(context, response, HttpStatusCode.RequestTimeout);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro inesperado no processamento da requisição");
+
+            var response = ApiResponse<string>.Falha("Erro interno no servidor. Tente novamente mais tarde.");
+            await WriteResponseAsync(context, response, HttpStatusCode.InternalServerError);
+        }
+    }
+
+    private static async Task WriteResponseAsync<T>(HttpContext context, ApiResponse<T> response, HttpStatusCode statusCode)
+    {
+        context.Response.StatusCode = (int)statusCode;
+        context.Response.ContentType = "application/json";
+
+        var json = JsonSerializer.Serialize(response, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true
+        });
+
+        await context.Response.WriteAsync(json);
+    }
+}
+
+🧩 Exceção personalizada — ExternalApiException.cs
+
+(Em bff.projeto.Infra/HttpClients/)
+
+using System.Net;
+
+namespace bff.projeto.Infra.HttpClients;
+
+public class ExternalApiException : Exception
+{
+    public HttpStatusCode StatusCode { get; }
+
+    public ExternalApiException(HttpStatusCode statusCode, string message)
+        : base(message)
+    {
+        StatusCode = statusCode;
+    }
+}
+
+🪄 Registro no Program.cs
+var app = builder.Build();
+
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+app.MapControllers();
+
+app.Run();
+
+🧠 O que este middleware faz
+Tipo de erro	Resposta HTTP	Corpo JSON
+Falha de API externa (ExternalApiException)	502 Bad Gateway	{ "sucesso": false, "erros": ["Falha na comunicação com serviço externo: ..."] }
+Falha de autenticação (UnauthorizedAccessException)	401 Unauthorized	{ "sucesso": false, "erros": ["Acesso negado. Verifique suas credenciais."] }
+Timeout ou cancelamento (OperationCanceledException)	408 RequestTimeout	{ "sucesso": false, "erros": ["Operação cancelada ou expirada."] }
+Qualquer outra exceção (Exception)	500 InternalServerError	{ "sucesso": false, "erros": ["Erro interno no servidor. Tente novamente mais tarde."] }
+💡 Benefícios
+
+Centraliza todo o tratamento de erro da BFF
+
+Mantém respostas padronizadas com o seu ApiResponse
+
+Evita duplicar try/catch em cada controller
+
+Log estruturado com severidade adequada (Warning / Error)
+
+Fácil de estender (ex: incluir ValidationException no futuro)
