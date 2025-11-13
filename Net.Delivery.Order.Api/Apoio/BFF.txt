@@ -1,0 +1,1002 @@
+﻿bff.projeto.sln
+│
+├── bff.projeto.API
+│   ├── Controllers
+│   │   └── UsuarioController.cs
+│   ├── Middlewares
+│   │   └── ExceptionHandlingMiddleware.cs
+│   ├── Models
+│   │   ├── Request
+│   │   │   └── UsuarioRequest.cs
+│   │   └── Response
+│   │       └── UsuarioResponse.cs
+│   ├── Extensions
+│   │   ├── ServiceCollectionsExtensions.cs
+│   │   └── ApplicationCollectionsExtensions.cs
+│   ├── appsettings.Development.json
+│   ├── appsettings.Homologacao.json
+│   └── appsettings.Producao.json
+│
+├── bff.projeto.Application
+│   ├── UseCases
+│   │   └── UsuarioUseCase.cs
+│   ├── Entities
+│   │   └── UsuarioEntity.cs
+│   ├── Mappers
+│   │   └── UsuarioMapper.cs
+│   ├── Contracts
+│   │   └── IUsuarioService.cs
+│   └── Extensions
+│       └── ApplicationCollectionsExtensions.cs
+│
+└── bff.projeto.Infra
+    ├── HttpClients
+    │   ├── UsuarioApiClient.cs
+    │   └── AuthenticateHttpClientFactory.cs
+    ├── Configurations
+    │   ├── HttpClientConfiguration.cs
+    │   └── CacheConfigurations.cs
+    ├── Cache
+    │   └── MemoryCacheService.cs
+    └── HealthChecks
+        └── ExternalApiHealthCheck.cs
+//----------------------------------------------------------------------
+xemplo de implementação base
+bff.projeto.API
+Program.cs
+var builder = WebApplication.CreateBuilder(args);
+
+// Adiciona serviços da camada Application e Infra
+builder.Services.AddApplication();
+builder.Services.AddInfra(builder.Configuration);
+
+// Configura controllers e middlewares
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+var app = builder.Build();
+
+// Middleware global de tratamento de exceções
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+app.UseSwagger();
+app.UseSwaggerUI();
+
+app.MapControllers();
+
+app.Run();
+
+Controllers/UsuarioController.cs
+using Microsoft.AspNetCore.Mvc;
+using bff.projeto.Application.UseCases;
+using bff.projeto.API.Models.Request;
+using bff.projeto.API.Models.Response;
+
+namespace bff.projeto.API.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class UsuarioController : ControllerBase
+    {
+        private readonly UsuarioUseCase _useCase;
+
+        public UsuarioController(UsuarioUseCase useCase)
+        {
+            _useCase = useCase;
+        }
+
+        [HttpPost("criar")]
+        public async Task<ActionResult<UsuarioResponse>> CriarAsync([FromBody] UsuarioRequest request)
+        {
+            var result = await _useCase.CriarUsuarioAsync(request);
+            return Ok(result);
+        }
+    }
+}
+
+Middlewares/ExceptionHandlingMiddleware.cs
+using System.Net;
+using System.Text.Json;
+
+namespace bff.projeto.API.Middlewares
+{
+    public class ExceptionHandlingMiddleware
+    {
+        private readonly RequestDelegate _next;
+        private readonly ILogger<ExceptionHandlingMiddleware> _logger;
+
+        public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
+        {
+            _next = next;
+            _logger = logger;
+        }
+
+        public async Task InvokeAsync(HttpContext context)
+        {
+            try
+            {
+                await _next(context);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro inesperado");
+                context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                context.Response.ContentType = "application/json";
+                var response = new { erro = ex.Message };
+                await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+            }
+        }
+    }
+}
+
+Models/Request/UsuarioRequest.cs
+namespace bff.projeto.API.Models.Request
+{
+    public class UsuarioRequest
+    {
+        public string Nome { get; set; } = default!;
+        public string Email { get; set; } = default!;
+    }
+}
+
+Models/Response/UsuarioResponse.cs
+namespace bff.projeto.API.Models.Response
+{
+    public class UsuarioResponse
+    {
+        public Guid Id { get; set; }
+        public string Nome { get; set; } = default!;
+        public string Email { get; set; } = default!;
+    }
+}
+
+bff.projeto.Application
+Entities/UsuarioEntity.cs
+namespace bff.projeto.Application.Entities
+{
+    public class UsuarioEntity
+    {
+        public Guid Id { get; private set; } = Guid.NewGuid();
+        public string Nome { get; private set; }
+        public string Email { get; private set; }
+
+        public UsuarioEntity(string nome, string email)
+        {
+            Nome = nome;
+            Email = email;
+        }
+    }
+}
+
+Contracts/IUsuarioService.cs
+using bff.projeto.Application.Entities;
+
+namespace bff.projeto.Application.Contracts
+{
+    public interface IUsuarioService
+    {
+        Task<UsuarioEntity> CriarUsuarioAsync(UsuarioEntity usuario);
+    }
+}
+
+Mappers/UsuarioMapper.cs
+using bff.projeto.API.Models.Request;
+using bff.projeto.API.Models.Response;
+using bff.projeto.Application.Entities;
+
+namespace bff.projeto.Application.Mappers
+{
+    public static class UsuarioMapper
+    {
+        public static UsuarioEntity ToEntity(UsuarioRequest request) =>
+            new(request.Nome, request.Email);
+
+        public static UsuarioResponse ToResponse(UsuarioEntity entity) => new()
+        {
+            Id = entity.Id,
+            Nome = entity.Nome,
+            Email = entity.Email
+        };
+    }
+}
+
+UseCases/UsuarioUseCase.cs
+using bff.projeto.API.Models.Request;
+using bff.projeto.API.Models.Response;
+using bff.projeto.Application.Contracts;
+using bff.projeto.Application.Mappers;
+
+namespace bff.projeto.Application.UseCases
+{
+    public class UsuarioUseCase
+    {
+        private readonly IUsuarioService _usuarioService;
+
+        public UsuarioUseCase(IUsuarioService usuarioService)
+        {
+            _usuarioService = usuarioService;
+        }
+
+        public async Task<UsuarioResponse> CriarUsuarioAsync(UsuarioRequest request)
+        {
+            var entity = UsuarioMapper.ToEntity(request);
+            var created = await _usuarioService.CriarUsuarioAsync(entity);
+            return UsuarioMapper.ToResponse(created);
+        }
+    }
+}
+
+bff.projeto.Infra
+HttpClients/UsuarioApiClient.cs
+using System.Net.Http.Json;
+using bff.projeto.Application.Entities;
+
+namespace bff.projeto.Infra.HttpClients
+{
+    public class UsuarioApiClient
+    {
+        private readonly HttpClient _httpClient;
+
+        public UsuarioApiClient(HttpClient httpClient)
+        {
+            _httpClient = httpClient;
+        }
+
+        public async Task<UsuarioEntity?> CriarUsuarioAsync(UsuarioEntity usuario)
+        {
+            var response = await _httpClient.PostAsJsonAsync("usuarios", usuario);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<UsuarioEntity>();
+        }
+    }
+}
+
+Contracts Implementation (no Infra)
+using bff.projeto.Application.Contracts;
+using bff.projeto.Application.Entities;
+using bff.projeto.Infra.HttpClients;
+
+namespace bff.projeto.Infra.Services
+{
+    public class UsuarioService : IUsuarioService
+    {
+        private readonly UsuarioApiClient _apiClient;
+
+        public UsuarioService(UsuarioApiClient apiClient)
+        {
+            _apiClient = apiClient;
+        }
+
+        public async Task<UsuarioEntity> CriarUsuarioAsync(UsuarioEntity usuario)
+        {
+            return await _apiClient.CriarUsuarioAsync(usuario)
+                ?? throw new Exception("Erro ao criar usuário na API externa");
+        }
+    }
+}
+
+Configurations/HttpClientConfiguration.cs
+namespace bff.projeto.Infra.Configurations
+{
+    public static class HttpClientConfiguration
+    {
+        public static IServiceCollection AddHttpClientConfigurations(this IServiceCollection services, IConfiguration config)
+        {
+            var baseUrl = config.GetValue<string>("ExternalApi:BaseUrl") ?? throw new Exception("BaseUrl não configurada");
+            services.AddHttpClient<UsuarioApiClient>(c =>
+            {
+                c.BaseAddress = new Uri(baseUrl);
+            });
+
+            return services;
+        }
+    }
+}
+
+⚙️ Extensões de Registro
+bff.projeto.Application/Extensions/ApplicationCollectionsExtensions.cs
+using Microsoft.Extensions.DependencyInjection;
+
+namespace bff.projeto.Application.Extensions
+{
+    public static class ApplicationCollectionsExtensions
+    {
+        public static IServiceCollection AddApplication(this IServiceCollection services)
+        {
+            services.AddScoped<UseCases.UsuarioUseCase>();
+            return services;
+        }
+    }
+}
+
+bff.projeto.Infra/Extensions/InfraCollectionsExtensions.cs
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using bff.projeto.Application.Contracts;
+using bff.projeto.Infra.Services;
+using bff.projeto.Infra.Configurations;
+using bff.projeto.Infra.HttpClients;
+
+namespace bff.projeto.Infra.Extensions
+{
+    public static class InfraCollectionsExtensions
+    {
+        public static IServiceCollection AddInfra(this IServiceCollection services, IConfiguration configuration)
+        {
+            services.AddHttpClientConfigurations(configuration);
+            services.AddScoped<IUsuarioService, UsuarioService>();
+            return services;
+        }
+    }
+}
+
+
+#-------------Add cache
+
+📁 bff.projeto.Infra/Cache/MemoryCacheService.cs
+📁 bff.projeto.Infra/Configurations/CacheConfigurations.cs
+
+Usaremos o IMemoryCache nativo do .NET para criar uma implementação limpa e genérica, que pode ser usada pelos UseCases, Services e HttpClients.
+
+🧠 CacheConfigurations.cs
+
+Configura o cache na injeção de dependências (com tempo padrão configurável via appsettings.json).
+
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Caching.Memory;
+
+namespace bff.projeto.Infra.Configurations
+{
+    public static class CacheConfigurations
+    {
+        public static IServiceCollection AddCacheConfigurations(this IServiceCollection services, IConfiguration configuration)
+        {
+            var cacheOptions = configuration.GetSection("CacheSettings");
+            var sizeLimit = cacheOptions.GetValue<long?>("SizeLimit");
+            var expirationScanFrequencySeconds = cacheOptions.GetValue<int?>("ExpirationScanFrequencySeconds");
+
+            services.AddMemoryCache(options =>
+            {
+                if (sizeLimit.HasValue)
+                    options.SizeLimit = sizeLimit.Value;
+
+                if (expirationScanFrequencySeconds.HasValue)
+                    options.ExpirationScanFrequency = TimeSpan.FromSeconds(expirationScanFrequencySeconds.Value);
+            });
+
+            services.AddSingleton<MemoryCacheService>();
+
+            return services;
+        }
+    }
+}
+
+⚡ MemoryCacheService.cs
+
+Serviço genérico e reutilizável de cache com suporte a tempo de expiração, remoção e leitura tipada.
+
+using Microsoft.Extensions.Caching.Memory;
+
+namespace bff.projeto.Infra.Cache
+{
+    public class MemoryCacheService
+    {
+        private readonly IMemoryCache _cache;
+        private readonly ILogger<MemoryCacheService> _logger;
+
+        public MemoryCacheService(IMemoryCache cache, ILogger<MemoryCacheService> logger)
+        {
+            _cache = cache;
+            _logger = logger;
+        }
+
+        /// <summary>
+        /// Adiciona um item no cache.
+        /// </summary>
+        public void Set<T>(string key, T value, TimeSpan? expiration = null)
+        {
+            var cacheOptions = new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = expiration ?? TimeSpan.FromMinutes(10),
+                Size = 1
+            };
+
+            _cache.Set(key, value, cacheOptions);
+            _logger.LogDebug("Cache adicionado: {Key}", key);
+        }
+
+        /// <summary>
+        /// Recupera um item do cache.
+        /// </summary>
+        public T? Get<T>(string key)
+        {
+            if (_cache.TryGetValue(key, out T? value))
+            {
+                _logger.LogDebug("Cache hit: {Key}", key);
+                return value;
+            }
+
+            _logger.LogDebug("Cache miss: {Key}", key);
+            return default;
+        }
+
+        /// <summary>
+        /// Remove um item do cache.
+        /// </summary>
+        public void Remove(string key)
+        {
+            _cache.Remove(key);
+            _logger.LogDebug("Cache removido: {Key}", key);
+        }
+    }
+}
+
+🧩 Exemplo de configuração no appsettings.Development.json
+{
+  "CacheSettings": {
+    "SizeLimit": 1024,
+    "ExpirationScanFrequencySeconds": 60
+  },
+  "ExternalApi": {
+    "BaseUrl": "https://api.externa.dev/"
+  }
+}
+
+⚙️ Atualização em InfraCollectionsExtensions.cs
+
+Integre a configuração do cache junto com HttpClient e Services:
+
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using bff.projeto.Application.Contracts;
+using bff.projeto.Infra.Services;
+using bff.projeto.Infra.Configurations;
+
+namespace bff.projeto.Infra.Extensions
+{
+    public static class InfraCollectionsExtensions
+    {
+        public static IServiceCollection AddInfra(this IServiceCollection services, IConfiguration configuration)
+        {
+            services.AddHttpClientConfigurations(configuration);
+            services.AddCacheConfigurations(configuration);
+            services.AddScoped<IUsuarioService, UsuarioService>();
+
+            return services;
+        }
+    }
+}
+
+🧠 Exemplo de uso no código (por exemplo, em um UseCase)
+using bff.projeto.Infra.Cache;
+
+public class UsuarioUseCase
+{
+    private readonly IUsuarioService _usuarioService;
+    private readonly MemoryCacheService _cache;
+
+    public UsuarioUseCase(IUsuarioService usuarioService, MemoryCacheService cache)
+    {
+        _usuarioService = usuarioService;
+        _cache = cache;
+    }
+
+    public async Task<UsuarioResponse> ObterUsuarioAsync(string email)
+    {
+        string cacheKey = $"usuario_{email}";
+        var usuario = _cache.Get<UsuarioResponse>(cacheKey);
+
+        if (usuario is not null)
+            return usuario;
+
+        // se não houver no cache, chama API
+        var entity = await _usuarioService.CriarUsuarioAsync(new Application.Entities.UsuarioEntity("Nome", email));
+
+        var response = new UsuarioResponse
+        {
+            Id = entity.Id,
+            Nome = entity.Nome,
+            Email = entity.Email
+        };
+
+        _cache.Set(cacheKey, response, TimeSpan.FromMinutes(5));
+
+        return response;
+    }
+}
+
+
+#--------------------Login
+Excelente 👏 — vamos evoluir o BFF em .NET 8 para incluir autenticação e login com uma arquitetura coerente com o padrão que você montou (bff.projeto.API, Application, Infra).
+
+Abaixo você verá a adição da feature Login, mantendo a mesma organização de pastas e boas práticas (Clean Architecture + BFF pattern).
+
+🧱 Estrutura atualizada
+bff.projeto.sln
+│
+├── bff.projeto.API
+│   ├── Controllers
+│   │   ├── UsuarioController.cs
+│   │   └── LoginController.cs          ✅
+│   ├── Models
+│   │   ├── Request
+│   │   │   ├── UsuarioRequest.cs
+│   │   │   └── LoginRequest.cs         ✅
+│   │   └── Response
+│   │       ├── UsuarioResponse.cs
+│   │       └── LoginResponse.cs        ✅
+│
+├── bff.projeto.Application
+│   ├── UseCases
+│   │   ├── UsuarioUseCase.cs
+│   │   └── LoginUseCase.cs             ✅
+│   ├── Contracts
+│   │   ├── IUsuarioService.cs
+│   │   └── ILoginService.cs            ✅
+│   ├── Entities
+│   │   └── UsuarioEntity.cs
+│   ├── Mappers
+│   │   └── LoginMapper.cs              ✅
+│
+└── bff.projeto.Infra
+    ├── HttpClients
+    │   ├── UsuarioApiClient.cs
+    │   └── AuthApiClient.cs            ✅
+    ├── Services
+    │   ├── UsuarioService.cs
+    │   └── LoginService.cs             ✅
+    ├── Configurations
+    │   ├── HttpClientConfiguration.cs
+    │   └── CacheConfigurations.cs
+
+🔐 Camada API
+Models/Request/LoginRequest.cs
+namespace bff.projeto.API.Models.Request
+{
+    public class LoginRequest
+    {
+        public string Username { get; set; } = default!;
+        public string Password { get; set; } = default!;
+    }
+}
+
+Models/Response/LoginResponse.cs
+namespace bff.projeto.API.Models.Response
+{
+    public class LoginResponse
+    {
+        public string Token { get; set; } = default!;
+        public DateTime Expiration { get; set; }
+    }
+}
+
+Controllers/LoginController.cs
+using Microsoft.AspNetCore.Mvc;
+using bff.projeto.API.Models.Request;
+using bff.projeto.API.Models.Response;
+using bff.projeto.Application.UseCases;
+
+namespace bff.projeto.API.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class LoginController : ControllerBase
+    {
+        private readonly LoginUseCase _loginUseCase;
+
+        public LoginController(LoginUseCase loginUseCase)
+        {
+            _loginUseCase = loginUseCase;
+        }
+
+        [HttpPost]
+        public async Task<ActionResult<LoginResponse>> PostAsync([FromBody] LoginRequest request)
+        {
+            var response = await _loginUseCase.AutenticarAsync(request);
+            return Ok(response);
+        }
+    }
+}
+
+🧩 Camada Application
+Contracts/ILoginService.cs
+using bff.projeto.Application.Entities;
+
+namespace bff.projeto.Application.Contracts
+{
+    public interface ILoginService
+    {
+        Task<(string Token, DateTime Expiration)> AutenticarAsync(string username, string password);
+    }
+}
+
+Mappers/LoginMapper.cs
+using bff.projeto.API.Models.Request;
+using bff.projeto.API.Models.Response;
+
+namespace bff.projeto.Application.Mappers
+{
+    public static class LoginMapper
+    {
+        public static (string Username, string Password) ToCredentials(LoginRequest request)
+            => (request.Username, request.Password);
+
+        public static LoginResponse ToResponse((string Token, DateTime Expiration) result)
+            => new()
+            {
+                Token = result.Token,
+                Expiration = result.Expiration
+            };
+    }
+}
+
+UseCases/LoginUseCase.cs
+using bff.projeto.API.Models.Request;
+using bff.projeto.API.Models.Response;
+using bff.projeto.Application.Contracts;
+using bff.projeto.Application.Mappers;
+
+namespace bff.projeto.Application.UseCases
+{
+    public class LoginUseCase
+    {
+        private readonly ILoginService _loginService;
+
+        public LoginUseCase(ILoginService loginService)
+        {
+            _loginService = loginService;
+        }
+
+        public async Task<LoginResponse> AutenticarAsync(LoginRequest request)
+        {
+            var (username, password) = LoginMapper.ToCredentials(request);
+            var result = await _loginService.AutenticarAsync(username, password);
+            return LoginMapper.ToResponse(result);
+        }
+    }
+}
+
+🌐 Camada Infra
+HttpClients/AuthApiClient.cs
+using System.Net.Http.Json;
+
+namespace bff.projeto.Infra.HttpClients
+{
+    public class AuthApiClient
+    {
+        private readonly HttpClient _httpClient;
+
+        public AuthApiClient(HttpClient httpClient)
+        {
+            _httpClient = httpClient;
+        }
+
+        public async Task<(string Token, DateTime Expiration)> LoginAsync(string username, string password)
+        {
+            var body = new { username, password };
+            var response = await _httpClient.PostAsJsonAsync("auth/login", body);
+
+            response.EnsureSuccessStatusCode();
+
+            var result = await response.Content.ReadFromJsonAsync<AuthResponseDto>();
+            if (result == null)
+                throw new Exception("Resposta inválida da API de autenticação.");
+
+            return (result.Token, result.Expiration);
+        }
+
+        private record AuthResponseDto(string Token, DateTime Expiration);
+    }
+}
+
+Services/LoginService.cs
+using bff.projeto.Application.Contracts;
+using bff.projeto.Infra.HttpClients;
+
+namespace bff.projeto.Infra.Services
+{
+    public class LoginService : ILoginService
+    {
+        private readonly AuthApiClient _apiClient;
+
+        public LoginService(AuthApiClient apiClient)
+        {
+            _apiClient = apiClient;
+        }
+
+        public async Task<(string Token, DateTime Expiration)> AutenticarAsync(string username, string password)
+        {
+            return await _apiClient.LoginAsync(username, password);
+        }
+    }
+}
+
+🔧 Configurations/HttpClientConfiguration.cs (atualizado)
+namespace bff.projeto.Infra.Configurations
+{
+    public static class HttpClientConfiguration
+    {
+        public static IServiceCollection AddHttpClientConfigurations(this IServiceCollection services, IConfiguration config)
+        {
+            var externalApi = config.GetSection("ExternalApi");
+
+            services.AddHttpClient<UsuarioApiClient>(c =>
+            {
+                c.BaseAddress = new Uri(externalApi.GetValue<string>("BaseUrl")!);
+            });
+
+            services.AddHttpClient<AuthApiClient>(c =>
+            {
+                c.BaseAddress = new Uri(externalApi.GetValue<string>("AuthBaseUrl")!);
+            });
+
+            return services;
+        }
+    }
+}
+
+InfraCollectionsExtensions.cs (atualizado)
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using bff.projeto.Application.Contracts;
+using bff.projeto.Infra.Services;
+using bff.projeto.Infra.Configurations;
+
+namespace bff.projeto.Infra.Extensions
+{
+    public static class InfraCollectionsExtensions
+    {
+        public static IServiceCollection AddInfra(this IServiceCollection services, IConfiguration configuration)
+        {
+            services.AddHttpClientConfigurations(configuration);
+            services.AddCacheConfigurations(configuration);
+
+            services.AddScoped<IUsuarioService, UsuarioService>();
+            services.AddScoped<ILoginService, LoginService>();
+
+            return services;
+        }
+    }
+}
+
+🧩 appsettings.Development.json
+{
+  "ExternalApi": {
+    "BaseUrl": "https://api.externa.dev/",
+    "AuthBaseUrl": "https://auth.externa.dev/"
+  },
+  "CacheSettings": {
+    "SizeLimit": 1024,
+    "ExpirationScanFrequencySeconds": 60
+  }
+}
+
+🧪 Exemplo de chamada HTTP
+
+POST /api/login
+
+{
+  "username": "Teste",
+  "password": "123456"
+}
+
+
+Resposta
+
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expiration": "2025-11-12T23:59:59Z"
+}
+
+
+#-------------------Token:
+Isso é o comportamento típico de um BFF (Backend for Frontend): ele autentica o usuário, guarda o token (em cache ou contexto) e o injeta nos cabeçalhos das requisições para os serviços externos.
+
+🎯 Objetivo
+
+O usuário faz login no endpoint /api/login;
+
+O BFF recebe o token JWT da API de autenticação;
+
+Nas próximas chamadas externas (por exemplo, via UsuarioApiClient), o BFF:
+
+recupera o token do cache,
+
+adiciona o header Authorization: Bearer <token> automaticamente.
+
+🧩 Atualizações necessárias
+1. 🔐 Salvar o token no cache no momento do login
+
+Vamos modificar o LoginUseCase para guardar o token após autenticação.
+
+Application/UseCases/LoginUseCase.cs
+using bff.projeto.API.Models.Request;
+using bff.projeto.API.Models.Response;
+using bff.projeto.Application.Contracts;
+using bff.projeto.Application.Mappers;
+using bff.projeto.Infra.Cache;
+
+namespace bff.projeto.Application.UseCases
+{
+    public class LoginUseCase
+    {
+        private readonly ILoginService _loginService;
+        private readonly MemoryCacheService _cache;
+
+        private const string TOKEN_CACHE_KEY = "auth_token";
+
+        public LoginUseCase(ILoginService loginService, MemoryCacheService cache)
+        {
+            _loginService = loginService;
+            _cache = cache;
+        }
+
+        public async Task<LoginResponse> AutenticarAsync(LoginRequest request)
+        {
+            var (username, password) = LoginMapper.ToCredentials(request);
+            var result = await _loginService.AutenticarAsync(username, password);
+
+            // Guarda o token no cache para reutilizar nas chamadas externas
+            _cache.Set(TOKEN_CACHE_KEY, result.Token, result.Expiration - DateTime.UtcNow);
+
+            return LoginMapper.ToResponse(result);
+        }
+
+        public string? ObterTokenAtual()
+        {
+            return _cache.Get<string>(TOKEN_CACHE_KEY);
+        }
+    }
+}
+
+2. 💡 Criar um DelegatingHandler para adicionar o token automaticamente
+
+Esse handler intercepta todas as chamadas HTTP e adiciona o header Authorization.
+
+Infra/HttpClients/AuthenticateHttpClientHandler.cs
+using System.Net.Http.Headers;
+using bff.projeto.Infra.Cache;
+
+namespace bff.projeto.Infra.HttpClients
+{
+    public class AuthenticateHttpClientHandler : DelegatingHandler
+    {
+        private readonly MemoryCacheService _cache;
+        private const string TOKEN_CACHE_KEY = "auth_token";
+
+        public AuthenticateHttpClientHandler(MemoryCacheService cache)
+        {
+            _cache = cache;
+        }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var token = _cache.Get<string>(TOKEN_CACHE_KEY);
+
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            }
+
+            return await base.SendAsync(request, cancellationToken);
+        }
+    }
+}
+
+3. ⚙️ Registrar o DelegatingHandler no HttpClientConfiguration
+
+Assim todos os HttpClients que precisam de autenticação o receberão automaticamente.
+
+Infra/Configurations/HttpClientConfiguration.cs
+using bff.projeto.Infra.HttpClients;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace bff.projeto.Infra.Configurations
+{
+    public static class HttpClientConfiguration
+    {
+        public static IServiceCollection AddHttpClientConfigurations(this IServiceCollection services, IConfiguration config)
+        {
+            var externalApi = config.GetSection("ExternalApi");
+
+            // Handler que injeta o token JWT
+            services.AddTransient<AuthenticateHttpClientHandler>();
+
+            // API de Usuário (usa token)
+            services.AddHttpClient<UsuarioApiClient>(c =>
+            {
+                c.BaseAddress = new Uri(externalApi.GetValue<string>("BaseUrl")!);
+            })
+            .AddHttpMessageHandler<AuthenticateHttpClientHandler>();
+
+            // API de Autenticação (não precisa de token)
+            services.AddHttpClient<AuthApiClient>(c =>
+            {
+                c.BaseAddress = new Uri(externalApi.GetValue<string>("AuthBaseUrl")!);
+            });
+
+            return services;
+        }
+    }
+}
+
+4. 🧠 Exemplo de uso do token em uma chamada
+Infra/HttpClients/UsuarioApiClient.cs
+using System.Net.Http.Json;
+using bff.projeto.Application.Entities;
+
+namespace bff.projeto.Infra.HttpClients
+{
+    public class UsuarioApiClient
+    {
+        private readonly HttpClient _httpClient;
+
+        public UsuarioApiClient(HttpClient httpClient)
+        {
+            _httpClient = httpClient;
+        }
+
+        public async Task<UsuarioEntity?> CriarUsuarioAsync(UsuarioEntity usuario)
+        {
+            // O header Authorization será adicionado automaticamente pelo handler
+            var response = await _httpClient.PostAsJsonAsync("usuarios", usuario);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<UsuarioEntity>();
+        }
+
+        public async Task<UsuarioEntity?> ObterPorEmailAsync(string email)
+        {
+            var response = await _httpClient.GetAsync($"usuarios/email/{email}");
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<UsuarioEntity>();
+        }
+    }
+}
+
+5. ✅ Exemplo de fluxo
+
+1️⃣ Login
+
+POST /api/login
+{
+  "username": "teste",
+  "password": "123456"
+}
+
+
+➡️ BFF recebe o token JWT e o salva no cache (MemoryCacheService).
+
+2️⃣ Chamada autenticada
+
+POST /api/usuario/criar
+{
+  "nome": "João",
+  "email": "joao@exemplo.com"
+}
+
+
+➡️ O UsuarioApiClient envia automaticamente:
+
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6...
+
+6. 🧾 Opcional: limpeza de token (logout)
+
+Você pode adicionar um método simples de logout:
+
+public void Logout()
+{
+    _cache.Remove(TOKEN_CACHE_KEY);
+}
+
+7. 🔒 Segurança (boas práticas)
+
+✅ Em produção, use DistributedCache (ex: Redis) para tokens por usuário.
+
+✅ Configure expiração curta e refresh automático se o token expirar.
+
+✅ Nunca logue o token no console.
+
+✅ Considere guardar também o refresh_token no cache.
