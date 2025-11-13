@@ -1,0 +1,544 @@
+﻿using System.Net;
+using System.Net.Http.Headers;
+using Projeto.Testes.Domain.Exceptions;
+using Projeto.Testes.Domain.Requests;
+using Newtonsoft.Json;
+
+namespace Projeto.Teste.Infra.OrderList.Client;
+
+public abstract class ClientBase
+{
+    protected static async Task<T> DeserializarObjetoResponse<T>(HttpResponseMessage responseMessage)
+    {
+        return JsonConvert.DeserializeObject<T>(await responseMessage.Content.ReadAsStringAsync()) ?? default;
+    }
+
+    public static HttpContent CreateContent<T>(T data)
+    {
+        HttpContent content = new StringContent(JsonConvert.SerializeObject(data));
+
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+        return content;
+    }
+
+    protected static void TratarErrosResponse(HttpResponseMessage response, string errorMessage)
+    {
+        if (response.StatusCode == HttpStatusCode.BadRequest) throw new BusinessException(errorMessage);
+
+        response.EnsureSuccessStatusCode();
+    }
+}
+
+//============
+using System.Net;
+using System.Net.Http.Headers;
+using Projeto.Testes.Domain.Exceptions;
+using Projeto.Testes.Domain.Requests;
+using Newtonsoft.Json;
+
+namespace Projeto.Testes.Infra.OrderList.Client;
+
+public abstract class ClientBase
+{
+    protected static async Task<T> DeserializarObjetoResponse<T>(HttpResponseMessage responseMessage)
+    {
+        return JsonConvert.DeserializeObject<T>(await responseMessage.Content.ReadAsStringAsync()) ?? default;
+    }
+
+    public static HttpContent CreateContent<T>(T data)
+    {
+        HttpContent content = new StringContent(JsonConvert.SerializeObject(data));
+
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+        return content;
+    }
+
+    protected static void TratarErrosResponse(HttpResponseMessage response, string errorMessage)
+    {
+        if (response.StatusCode == HttpStatusCode.BadRequest) throw new BusinessException(errorMessage);
+
+        response.EnsureSuccessStatusCode();
+    }
+}
+
+//================
+public interface IAuthenticationTesteClient
+{
+    Task<string> Autentica();
+    Task<string> GetToken();
+}
+
+//==================
+using Projeto.Teste.Application.Services.Authentication;
+using Projeto.Teste.Application.Services.Cache;
+using Projeto.Teste.Domain.Token;
+using Projeto.Teste.Domain.Utils;
+using Microsoft.Extensions.Logging;
+
+namespace Projeto.Teste.Infra.OrderList.Client.Authentication;
+
+public class AuthenticationTesteClient : ClientBase, IAuthenticationTesteClient
+{
+    private readonly ILogger<AuthenticationTesteClient> _logger;
+    private static readonly SemaphoreSlim semaphore = new(1);
+    private readonly ICache _cache;
+
+    private readonly HttpClient _httpClient;
+
+    public AuthenticationTesteClient(HttpClient httpClient, ICache cache, ILogger<AuthenticationTesteClient> logger)
+    {
+        _cache = cache;
+        _logger = logger;
+        _httpClient = httpClient;
+    }
+
+    public async Task<string> Autentica()
+    {
+        var response = await _httpClient.PostAsync("api/Usuario/login", CreateContent(new TokenRequestDTO
+        {
+            Email = ConfigurationKey.DeliveryOpsEmail,
+            Senha = ConfigurationKey.DeliveryOpsPass
+        }));
+
+        var responseToken = await DeserializarObjetoResponse<BaseRequestResultLogin<TokenResponseDTO>>(response);
+
+        await SetToken(responseToken.Token);
+
+        return responseToken.Token;
+    }
+
+    public async Task<string> GetToken()
+    {
+
+        var cachedTesteToken = await _cache.Get<CachedTesteToken>(CacheKeys.AUTH_TOKEN);
+
+        _logger.LogDebug("GetToken");
+
+        if (cachedTesteToken == null)
+        {
+            _logger.LogDebug("GetToken cached token igual null");
+            await semaphore.WaitAsync();
+            try
+            {
+                _logger.LogDebug("GetToken semaphore waits o cache");
+                cachedTesteToken = await _cache.Get<CachedTesteToken>(CacheKeys.AUTH_TOKEN);
+                if (cachedTesteToken == null)
+                {
+                    _logger.LogDebug("GetToken cached token igual null 2");
+                    var tokenResult = await Autentica();
+                    return tokenResult;
+                }
+            }
+            finally
+            {
+                _logger.LogDebug("GetToken semaphore release o cache");
+                semaphore.Release();
+            }
+        }
+
+        await _cache.GetOrAddAsync(
+            CacheKeys.USUARIO_MAX_MODIFIED,
+            GetDateAsync,
+            TimeSpan.FromMinutes(1));
+
+        _logger.LogDebug("Token => {token}", cachedTesteToken.Token);
+        return cachedTesteToken.Token;
+    }
+    private async Task SetToken(string resultToken)
+    {
+        _logger.LogDebug("SetToken in cache");
+        var lastModified = await _cache.GetOrAddAsync(CacheKeys.USUARIO_MAX_MODIFIED,
+            GetDateAsync,
+            TimeSpan.FromMinutes(1));
+
+        var cachedToken = new CachedTesteToken(resultToken, lastModified);
+
+        _cache.Set(CacheKeys.AUTH_TOKEN, cachedToken, TimeSpan.FromDays(1));
+
+        _logger.LogDebug("SetToken cache expira em um dia");
+    }
+    private async Task<DateTime?> GetDateAsync()
+    {
+        return await Task.FromResult(DateTime.UtcNow.Date);
+    }
+}
+public class CachedTesteToken
+{
+    public CachedTesteToken(string token, DateTime? lastModified)
+    {
+        Token = token;
+        LastModified = lastModified;
+    }
+    public string Token { get; private set; }
+
+    public DateTime? LastModified { get; private set; }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+//----------implementação finalizada-----------
+using System.Globalization;
+using System.Net.Http.Headers;
+using System.Text.Json;
+using Projeto.Testes.Application.Services.Authentication;
+using Projeto.Testes.Application.Services.Consequences;
+using Projeto.Testes.Domain.Commentary;
+using Projeto.Testes.Domain.Deliveryman;
+using Projeto.Testes.Domain.Exceptions;
+using Projeto.Testes.Domain.Jobs.DeliveryMan;
+using Projeto.Testes.Domain.Jobs.Store;
+using Projeto.Testes.Domain.CLSReasonDealing;
+using Projeto.Testes.Domain.CLSRollbackDealing;
+using Projeto.Testes.Domain.CLS.BlockingAutomatic;
+using Projeto.Testes.Domain.CLS.ChangeValue;
+using Projeto.Testes.Domain.CLS.Consequences;
+using Projeto.Testes.Domain.CLS.CLSAutomatic;
+using Projeto.Testes.Domain.CLS.CLSPending;
+using Projeto.Testes.Domain.CLS.V3.Comments;
+using Projeto.Testes.Domain.Requests;
+using Projeto.Testes.Domain.Resources;
+using Projeto.Testes.Domain.User;
+using Projeto.Testes.Domain.ValidateCLS;
+
+namespace DeliveryOps.CLSs.Infra.OrderList.Client.test test Client;
+
+public class test test Client : ClientBase, Itest test Client
+{
+    private readonly IAuthenticationTesteClient _AuthenticationTesteClient;
+    private readonly HttpClient _httpClient;
+
+    public test test Client(HttpClient httpClient, IAuthenticationTesteClient AuthenticationTesteClient)
+    {
+        _AuthenticationTesteClient = AuthenticationTesteClient;
+        _httpClient = httpClient;
+    }
+
+    public async Task<bool> UpdateSituationPending(SituationPendingDTO situationPendingDTO)
+    {
+        await SetToken(string.Empty);
+
+        var response = await _httpClient.PutAsync("api/Pedidotest/AtualizaSituacaoParaPendenteAutomatico",
+            CreateContent(situationPendingDTO));
+
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<CLSAutomaticCreatedDTO> CreateCLSAutomatic(CLSAutomaticDTO CLSAutomaticDTO)
+    {
+        await SetToken(string.Empty);
+
+        var response = await _httpClient.PostAsync("api/Pedidotest/CriarAutomaticaComValor",
+            CreateContent(CLSAutomaticDTO));
+
+        var responseBase = await DeserializarObjetoResponse<OrderListResponse<CLSAutomaticCreatedDTO>>(response);
+
+        TratarErrosResponse(response, responseBase.MensagemErro);
+
+        return responseBase.DataResult;
+    }
+    public async Task<CLSAutomaticCreatedDTO> ConfirmCLSAutomatic(CLSAutomaticDTO CLSConfirmationDTO)
+    {
+        await SetToken(string.Empty);
+
+        var response = await _httpClient.PostAsync("api/Pedidotest/ConfirmartestAutomatico",
+            CreateContent(CLSConfirmationDTO));
+
+        var responseBase = await DeserializarObjetoResponse<OrderListResponse<CLSAutomaticCreatedDTO>>(response);
+
+
+        TratarErrosResponse(response, responseBase.MensagemErro);
+
+        return responseBase.DataResult;
+    }
+
+    public async Task<bool> RefoundMerchant(RefoundMerchantDTO refoundMerchant)
+    {
+        await SetToken(string.Empty);
+
+        var response = await _httpClient.PostAsync("api/Pedidotest/ReembolsoLojistaAutomatico",
+            CreateContent(refoundMerchant));
+
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> DiscountDeliveryman(DiscountDeliverymanDTO discountDeliverymanDTO)
+    {
+        await SetToken(string.Empty);
+
+        var response = await _httpClient.PostAsync("api/Pedidotest/DescontoEntreAutomatico",
+            CreateContent(discountDeliverymanDTO));
+
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<ValidacaotestDTO> ValidateCLSOpening(int orderId, int storeId)
+    {
+        await SetToken(string.Empty);
+
+        var uri = $"api/Pedidotest/ValidaAberturatest?pedidoId={orderId}&usuarioId={storeId}";
+
+        var response = await _httpClient.GetAsync(uri);
+
+        return await DeserializarObjetoResponse<ValidacaotestDTO>(response);
+    }
+
+    public async Task<OrderListDetailsResponseDto> GetOrderByIdAsync(string orderId)
+    {
+        await SetToken(string.Empty);
+
+        var response = await _httpClient.GetAsync($"api/Pedido/{orderId}");
+        var responseBase = await DeserializarObjetoResponse<CreateOrderListDetailsResponse<OrderListDetailsResponseDto>>(response);
+        //aqui vai lançar uma exception 
+
+        TratarErrosResponse(response, responseBase.Mensagem);
+
+        return responseBase.Data;
+    }
+
+    public async Task<CourierDetailDTO> GetCourierDetailDTO(int courierId)
+    {
+        await SetToken(string.Empty);
+
+        var response = await _httpClient.GetAsync($"api/testsInfo/Entre/detalhes/{courierId}");
+        var responseBase = await DeserializarObjetoResponse<OrderListResponse<CourierDetailDTO>>(response);
+        //aqui vai lançar uma exception 
+
+        TratarErrosResponse(response, responseBase.MensagemErro);
+
+        return responseBase.DataResult;
+    }
+
+    public async Task<CourierDetailDTO> GetCourierDataDTO(int courierId)
+    {
+        await SetToken(string.Empty);
+
+        var response = await _httpClient.GetAsync($"api/testsInfo/Entre/dados/{courierId}");
+        var responseBase = await DeserializarObjetoResponse<OrderListResponse<CourierDetailDTO>>(response);
+        //aqui vai lançar uma exception 
+        TratarErrosResponse(response, responseBase.MensagemErro);
+
+        return responseBase.DataResult;
+    }
+
+    public async Task<bool> BlockingAutomaticDeliveryman(UsuarioEntreBloqueioCriacaoDTO usuarioEntreDTO)
+    {
+        await SetToken(string.Empty);
+
+        var response = await _httpClient.PostAsync("api/UsuarioEntreBloqueio/bloqueioAutomatico",
+            CreateContent(usuarioEntreDTO));
+
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> BlockingForSpecificStore(UsuarioEntreBloqueioCriacaoDTO usuarioEntreDTO)
+    {
+        await SetToken(string.Empty);
+
+        var response = await _httpClient.PostAsync("api/UsuarioEntreBloqueio/bloqueioAutomatico",
+            CreateContent(usuarioEntreDTO));
+
+        return response.IsSuccessStatusCode;
+    }
+
+    private async Task SetToken(string userToken)
+    {
+        var token = !string.IsNullOrWhiteSpace(userToken) ?
+            userToken : await _AuthenticationTesteClient.GetToken();
+
+        if (string.IsNullOrEmpty(token))
+            throw new BusinessException("Token inválido");
+
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+    }
+
+    public async Task<bool> BlockingOfflineOrders(UsuarioEntreBloqueioCriacaoDTO usuarioEntreDTO)
+    {
+        await SetToken(string.Empty);
+
+        var response = await _httpClient.PutAsync($"api/UsuarioEntreBloqueio/gerenciarBloqueioPedidoOffline?usuarioId={usuarioEntreDTO.UsuarioId}",
+            CreateContent(usuarioEntreDTO));
+
+        return response.IsSuccessStatusCode;
+    }
+    public async Task<ResponseBlockingOfflineOrder> ExistsBlockingOfflineOrders(UsuarioEntreBloqueioCriacaoDTO usuarioEntreDTO)
+    {
+        await SetToken(string.Empty);
+
+        var response = await _httpClient.GetAsync($"api/UsuarioEntreBloqueio/admin/bloqueio-offline/{usuarioEntreDTO.UsuarioId}");
+
+        var responseBase = await DeserializarObjetoResponse<OrderListResponse<ResponseBlockingOfflineOrder>>(response);
+        return responseBase.DataResult;
+    }
+
+    public async Task<List<OrderDetailsDTO>> GetOrdersByIds(List<int> orderIds)
+    {
+        await SetToken(string.Empty);
+
+        var response = await _httpClient.PostAsync("api/pedido/tests/buscarDetalhesPedidos",
+            CreateContent(new { pedidoIds = orderIds }));
+
+        var responseBase = await DeserializarObjetoResponse<OrderDetailsResponse>(response);
+        return responseBase.DataResult;
+    }
+    public async Task<BaseRequestResult<DealingsCLSManualResponse>> SendProcessDealingsCLSManual(DealingsCLSManualRequest dealingsCLSManualRequest)
+    {
+        await SetToken(string.Empty);
+
+        var response = await _httpClient.PostAsync("api/Pedidotest/ProcessarTTtestManual",
+            CreateContent(dealingsCLSManualRequest));
+
+        var responseBase = await DeserializarObjetoResponse<BaseRequestResult<DealingsCLSManualResponse>>(response);
+
+        TratarErrosResponse(response, responseBase.MensagemErro);
+
+        return responseBase;
+    }
+    public async Task<BaseRequestResult<RollbackDealingCLSResponse>> SendProcessRollbackDealingsCLS(RollbackDealingCLSRequest rollbackDealingCLSRequest)
+    {
+        await SetToken(string.Empty);
+        var response = await _httpClient.PostAsync("api/Pedidotest/RollbackTTtestDeliveryOps",
+            CreateContent(rollbackDealingCLSRequest));
+
+        var responseBase = await DeserializarObjetoResponse<BaseRequestResult<RollbackDealingCLSResponse>>(response);
+
+        TratarErrosResponse(response, responseBase.MensagemErro);
+
+        return responseBase;
+    }
+
+    public async Task<bool> UpdateCLSValue(UpdateCLSValueDTO updateCLS)
+    {
+        await SetToken(string.Empty);
+        var response = await _httpClient.PostAsync("api/Pedidotest/AtualizarValortest",
+            CreateContent(updateCLS));
+
+        TratarErrosResponse(response, string.Format(DeliveryOpsResource.ERROR_MESSAGE_REQUEST, "dasdsa"));
+
+        return response.IsSuccessStatusCode;
+    }
+    public async Task<CLSAutomaticCreatedDTO> OpenCLSAutomatic(CLSAutomaticDTO CLSAutomaticDTO)
+    {
+        await SetToken(string.Empty);
+
+        var response = await _httpClient.PostAsync("api/Pedidotest/CriarAutomatica",
+            CreateContent(CLSAutomaticDTO));
+
+        var responseBase = await DeserializarObjetoResponse<OrderListResponse<CLSAutomaticCreatedDTO>>(response);
+
+        TratarErrosResponse(response, responseBase.MensagemErro);
+
+        return responseBase.DataResult;
+    }
+
+    public async Task<bool> UpdateCLSStatus(UpdateCLSStatusDTO updateCLSStatusDTO)
+    {
+        await SetToken(string.Empty);
+        var response = await _httpClient.PutAsync("api/Pedidotest/AlterarSituacaoPedidotest", CreateContent(updateCLSStatusDTO));
+
+        TratarErrosResponse(response, string.Format(DeliveryOpsResource.ERROR_MESSAGE_REQUEST, "test test "));
+
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<List<BlockedDeliverymanResponse>> GetDeliverymanBlocked(string deliverymanId)
+    {
+        await SetToken(string.Empty);
+
+        var response = await _httpClient.GetAsync($"api/testsInfo/Entre/bloqueios/{deliverymanId}");
+
+        var responseBase = await DeserializarObjetoResponse<OrderListResponse<List<BlockedDeliverymanResponse>>>(response);
+
+        TratarErrosResponse(response, string.Format(DeliveryOpsResource.ERROR_MESSAGE_REQUEST, "test test "));
+
+        return responseBase.DataResult;
+    }
+
+    public async Task<CLSAutomaticCreatedDTO> CreateCLSMonitoring(CLSAutomaticDTO CLSAutomaticDTO)
+    {
+        await SetToken(string.Empty);
+
+        var response = await _httpClient.PostAsync("api/Pedidotest/CriarAutomaticaMonitoring",
+            CreateContent(CLSAutomaticDTO));
+
+        var responseBase = await DeserializarObjetoResponse<OrderListResponse<CLSAutomaticCreatedDTO>>(response);
+
+        TratarErrosResponse(response, responseBase.MensagemErro);
+
+        return responseBase.DataResult;
+    }
+    public async Task<bool> DiscountDeliveryManJob(DiscountDeliveryManDTO deliveryMan, string userToken)
+    {
+        await SetToken(userToken);
+
+        var response = await _httpClient.PostAsync("api/Pedidotest/DescontaEntreJob",
+            CreateContent(deliveryMan));
+
+        return response.IsSuccessStatusCode;
+    }
+    public async Task<RollbacktDeliveryManResponse> RollbackDeliveryManJob(
+        RollbackDeliveryManDTO rollback, string userToken)
+    {
+        await SetToken(userToken);
+
+        var uri = $"api/Pedidotest/ValidaRollbackEntreJob?EntreId={rollback.DeliveryManId}" +
+            $"&pedidoId={rollback.OrderId}" +
+            $"&EntreExtratoTipoId={rollback.UserDeliverExtractTypeId}";
+
+        var response = await _httpClient.GetAsync(uri);
+
+        return await DeserializarObjetoResponse<RollbacktDeliveryManResponse>(response);
+    }
+    public async Task<bool> RefundForStoreJob(RefundForStoreDTO store, string userToken)
+    {
+        await SetToken(userToken);
+
+        var response = await _httpClient.PostAsync("api/Pedidotest/ReembolsoLojistaJob",
+                       CreateContent(store));
+
+        return response.IsSuccessStatusCode;
+    }
+    public async Task<bool> RollbackStoreJob(RollbackStoreDTO rollback, string userToken)
+    {
+        await SetToken(userToken);
+
+        var response = await _httpClient.PostAsync("api/Pedidotest/RollbackReembolsoLojistaJob",
+                                  CreateContent(rollback));
+
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<UserResponse> GetUser(int userId)
+    {
+        await SetToken(string.Empty);
+
+        var response = await _httpClient.GetAsync($"api/Usuario/{userId}");
+
+        var responseBase = await DeserializarObjetoResponse<UserResponse>(response);
+
+        return responseBase;
+    }
+
+    public async Task<List<CommentaryDTO>> GetComment(string pedidoId)
+    {
+        await SetToken(string.Empty);
+
+        var response = await _httpClient.GetAsync($"api/Pedido/{pedidoId}/Comentario");
+
+        var responseBase = await DeserializarObjetoResponse<OrderListResponse<List<CommentaryDTO>>>(response);
+
+        TratarErrosResponse(response, string.Format(DeliveryOpsResource.ERROR_MESSAGE_REQUEST, "test test "));
+
+        return responseBase.DataResult;
+    }
+}
