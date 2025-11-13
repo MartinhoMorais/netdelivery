@@ -1,0 +1,190 @@
+﻿Perfeito 🔥 — agora vamos adicionar o AuthenticatorHttpClientFactory (o nome mais comum para esse tipo de componente) à sua arquitetura BFF em .NET 8.
+
+Ele será responsável por:
+✅ Criar HttpClients autenticados via IHttpClientFactory
+✅ Obter e armazenar o token JWT (com cache)
+✅ Facilitar os testes unitários (mockável via interface)
+
+🧱 Estrutura final (Infra)
+
+📁 bff.projeto.Infra/HttpClients/
+
+IAuthenticatorHttpClientFactory.cs
+AuthenticatorHttpClientFactory.cs
+IUsuarioApiClient.cs
+UsuarioApiClient.cs
+
+
+📁 bff.projeto.Infra/Configurations/
+
+HttpClientConfiguration.cs
+
+🧩 Interface — IAuthenticatorHttpClientFactory.cs
+namespace bff.projeto.Infra.HttpClients;
+
+public interface IAuthenticatorHttpClientFactory
+{
+    /// <summary>
+    /// Cria um HttpClient autenticado automaticamente com Bearer Token.
+    /// </summary>
+    Task<HttpClient> CreateAuthenticatedClientAsync(string clientName, CancellationToken cancellationToken = default);
+}
+
+⚙️ Implementação — AuthenticatorHttpClientFactory.cs
+using System.Net.Http.Headers;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Configuration;
+using System.Net.Http.Json;
+
+namespace bff.projeto.Infra.HttpClients;
+
+public class AuthenticatorHttpClientFactory : IAuthenticatorHttpClientFactory
+{
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IMemoryCache _cache;
+    private readonly IConfiguration _configuration;
+
+    public AuthenticatorHttpClientFactory(
+        IHttpClientFactory httpClientFactory,
+        IMemoryCache cache,
+        IConfiguration configuration)
+    {
+        _httpClientFactory = httpClientFactory;
+        _cache = cache;
+        _configuration = configuration;
+    }
+
+    public async Task<HttpClient> CreateAuthenticatedClientAsync(string clientName, CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(cancellationToken);
+
+        var client = _httpClientFactory.CreateClient(clientName);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        return client;
+    }
+
+    private async Task<string> GetAccessTokenAsync(CancellationToken cancellationToken)
+    {
+        if (_cache.TryGetValue("ExternalApiToken", out string? token) && !string.IsNullOrWhiteSpace(token))
+            return token;
+
+        var authClient = _httpClientFactory.CreateClient("AuthApi");
+
+        var authRequest = new
+        {
+            client_id = _configuration["ExternalApis:Auth:ClientId"],
+            client_secret = _configuration["ExternalApis:Auth:ClientSecret"],
+            grant_type = "client_credentials"
+        };
+
+        var response = await authClient.PostAsJsonAsync("token", authRequest, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadFromJsonAsync<AuthResponse>(cancellationToken: cancellationToken)
+            ?? throw new InvalidOperationException("Resposta de autenticação inválida");
+
+        token = result.AccessToken ?? throw new InvalidOperationException("Token inválido");
+
+        // Armazena token em cache com expiração próxima do tempo de validade
+        _cache.Set("ExternalApiToken", token, TimeSpan.FromMinutes(55));
+
+        return token;
+    }
+
+    private record AuthResponse(string AccessToken);
+}
+
+🧩 Cliente autenticado — UsuarioApiClient.cs
+using System.Net.Http.Json;
+
+namespace bff.projeto.Infra.HttpClients;
+
+public class UsuarioApiClient : IUsuarioApiClient
+{
+    private readonly IAuthenticatorHttpClientFactory _authClientFactory;
+
+    public UsuarioApiClient(IAuthenticatorHttpClientFactory authClientFactory)
+    {
+        _authClientFactory = authClientFactory;
+    }
+
+    public async Task<UsuarioExternoResponse?> ObterUsuarioPorEmailAsync(string email, CancellationToken cancellationToken = default)
+    {
+        var client = await _authClientFactory.CreateAuthenticatedClientAsync("UsuarioApi", cancellationToken);
+
+        var response = await client.GetAsync($"usuarios?email={Uri.EscapeDataString(email)}", cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<UsuarioExternoResponse>(cancellationToken: cancellationToken);
+    }
+}
+
+🧩 Configuração — HttpClientConfiguration.cs
+using Microsoft.Extensions.DependencyInjection;
+using bff.projeto.Infra.HttpClients;
+
+namespace bff.projeto.Infra.Configurations;
+
+public static class HttpClientConfiguration
+{
+    public static IServiceCollection AddHttpClientConfigurations(this IServiceCollection services, IConfiguration configuration)
+    {
+        var usuarioApiBaseUrl = configuration["ExternalApis:UsuariosBaseUrl"];
+        var authApiBaseUrl = configuration["ExternalApis:Auth:BaseUrl"];
+
+        // APIs externas
+        services.AddHttpClient("UsuarioApi", client =>
+        {
+            client.BaseAddress = new Uri(usuarioApiBaseUrl ?? throw new InvalidOperationException("URL da API de Usuário não configurada."));
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
+
+        services.AddHttpClient("AuthApi", client =>
+        {
+            client.BaseAddress = new Uri(authApiBaseUrl ?? throw new InvalidOperationException("URL da API de Autenticação não configurada."));
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
+
+        // Serviços auxiliares
+        services.AddMemoryCache();
+        services.AddScoped<IAuthenticatorHttpClientFactory, AuthenticatorHttpClientFactory>();
+        services.AddScoped<IUsuarioApiClient, UsuarioApiClient>();
+
+        return services;
+    }
+}
+
+📄 Exemplo no appsettings.Development.json
+{
+  "ExternalApis": {
+    "UsuariosBaseUrl": "https://api.externa.com/",
+    "Auth": {
+      "BaseUrl": "https://auth.externa.com/",
+      "ClientId": "bff-app",
+      "ClientSecret": "super-secreto"
+    }
+  }
+}
+
+✅ Registro no Program.cs
+builder.Services.AddHttpClientConfigurations(builder.Configuration);
+
+🧪 Testabilidade
+
+Você pode mockar facilmente a factory e o cliente:
+
+var mockFactory = new Mock<IAuthenticatorHttpClientFactory>();
+mockFactory.Setup(f => f.CreateAuthenticatedClientAsync("UsuarioApi", It.IsAny<CancellationToken>()))
+           .ReturnsAsync(new HttpClient(new FakeHttpMessageHandler()));
+
+
+Isso permite testar a camada Application e Infra isoladamente, sem chamadas HTTP reais.
+
+🧭 Benefícios da abordagem
+Vantagem	Descrição
+Separação de responsabilidades	O Authenticator foca só em obter token e criar clientes
+Reutilizável	Pode ser usado por vários clientes externos
+Seguro e performático	Usa MemoryCache para reduzir chamadas de autenticação
+Testável	Mockável via IAuthenticatorHttpClientFactory
+Integrável	Suporta múltiplas APIs com tokens distintos
