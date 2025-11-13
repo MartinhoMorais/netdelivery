@@ -1,0 +1,526 @@
+﻿Vamos fazer isso do jeito certo:
+
+
+criar a interface IUsuarioApiClient,
+
+
+implementar UsuarioApiClient usando IHttpClientFactory,
+
+
+registrar no container de DI,
+
+
+e mostrar como testar facilmente com Moq.
+
+
+Tudo compatível com .NET 8 e seguindo sua estrutura de camadas.
+
+🧱 Estrutura envolvida
+📁 bff.projeto.Infra/HttpClients/
+IUsuarioApiClient.cs
+UsuarioApiClient.cs
+AuthenticateHttpClientFactory.cs
+
+📁 bff.projeto.Infra/Configurations/
+HttpClientConfiguration.cs
+
+📁 bff.projeto.Application/Contracts/
+IUsuarioService.cs
+
+
+🧩 Interface — IUsuarioApiClient.cs
+namespace bff.projeto.Infra.HttpClients;
+
+public interface IUsuarioApiClient
+{
+    Task<UsuarioExternoResponse?> ObterUsuarioPorEmailAsync(string email, string token, CancellationToken cancellationToken = default);
+}
+
+
+⚙️ Implementação — UsuarioApiClient.cs
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Text.Json;
+
+namespace bff.projeto.Infra.HttpClients;
+
+public class UsuarioApiClient : IUsuarioApiClient
+{
+    private readonly HttpClient _httpClient;
+    private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
+
+    public UsuarioApiClient(HttpClient httpClient)
+    {
+        _httpClient = httpClient;
+    }
+
+    public async Task<UsuarioExternoResponse?> ObterUsuarioPorEmailAsync(string email, string token, CancellationToken cancellationToken = default)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"usuarios?email={Uri.EscapeDataString(email)}");
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<UsuarioExternoResponse>(_jsonOptions, cancellationToken);
+    }
+}
+
+
+🔧 Configuração do HttpClientFactory — HttpClientConfiguration.cs
+using Microsoft.Extensions.DependencyInjection;
+using bff.projeto.Infra.HttpClients;
+
+namespace bff.projeto.Infra.Configurations;
+
+public static class HttpClientConfiguration
+{
+    public static IServiceCollection AddHttpClientConfigurations(this IServiceCollection services, IConfiguration configuration)
+    {
+        var baseUrl = configuration["ExternalApis:UsuariosBaseUrl"];
+
+        services.AddHttpClient<IUsuarioApiClient, UsuarioApiClient>(client =>
+        {
+            client.BaseAddress = new Uri(baseUrl ?? throw new InvalidOperationException("External API base URL not configured"));
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
+
+        return services;
+    }
+}
+
+📄 Exemplo no appsettings.Development.json:
+{
+  "ExternalApis": {
+    "UsuariosBaseUrl": "https://api.externa.com/"
+  }
+}
+
+
+🧠 Registro no Program.cs (ou Startup.cs)
+builder.Services.AddHttpClientConfigurations(builder.Configuration);
+
+
+✅ Uso no Application
+using bff.projeto.Infra.HttpClients;
+
+public class UsuarioService : IUsuarioService
+{
+    private readonly IUsuarioApiClient _usuarioApiClient;
+
+    public UsuarioService(IUsuarioApiClient usuarioApiClient)
+    {
+        _usuarioApiClient = usuarioApiClient;
+    }
+
+    public async Task<UsuarioResponse?> ObterUsuarioAsync(string email, string token, CancellationToken cancellationToken)
+    {
+        var usuarioExterno = await _usuarioApiClient.ObterUsuarioPorEmailAsync(email, token, cancellationToken);
+        if (usuarioExterno == null)
+            return null;
+
+        return new UsuarioResponse(usuarioExterno.Id, usuarioExterno.Nome, usuarioExterno.Email);
+    }
+}
+
+
+🧪 Teste unitário com Moq (exemplo usando xUnit)
+using Moq;
+using bff.projeto.Infra.HttpClients;
+using bff.projeto.Application.Contracts;
+using Xunit;
+
+public class UsuarioServiceTests
+{
+    [Fact]
+    public async Task Deve_Obter_Usuario_Por_Email()
+    {
+        // Arrange
+        var mockApiClient = new Mock<IUsuarioApiClient>();
+        mockApiClient
+            .Setup(c => c.ObterUsuarioPorEmailAsync("teste@email.com", "fake-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UsuarioExternoResponse
+            {
+                Id = Guid.NewGuid(),
+                Nome = "João da Silva",
+                Email = "teste@email.com"
+            });
+
+        var service = new UsuarioService(mockApiClient.Object);
+
+        // Act
+        var result = await service.ObterUsuarioAsync("teste@email.com", "fake-token", CancellationToken.None);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("João da Silva", result.Nome);
+    }
+}
+
+
+✅ Benefícios da Interface + IHttpClientFactory
+VantagemDescriçãoTestabilidadePode mockar IUsuarioApiClient facilmenteResiliênciaIHttpClientFactory gerencia pooling e DNSSeparação de responsabilidadesInfra cuida de chamadas externas, Application cuida de regrasConfiguração centralizadaTimeout, BaseAddress e headers configurados por ambiente
+
+Se quiser, posso adicionar também o AuthenticateHttpClientFactory e mostrar como ele injeta o token automaticamente no HttpClient (sem precisar passar manualmente em cada chamada).
+Quer que eu monte esse passo seguinte também?
+
+
+
+
+##########################################
+Excelente observação 👏 — você percebeu um ponto muito importante.
+No exemplo anterior, o IHttpClientFactory é usado indiretamente por meio do AddHttpClient<IUsuarioApiClient, UsuarioApiClient>, mas não diretamente dentro da classe UsuarioApiClient.
+
+Vamos ver isso com clareza e as duas formas válidas de usar o IHttpClientFactory:
+
+🧩 Injeção automática pelo container (forma atual)
+
+⚙️ Uso manual dentro da classe (caso queira ter mais controle)
+
+🧩 1. Forma atual — via injeção automática (recomendada)
+
+Quando você registra assim:
+
+services.AddHttpClient<IUsuarioApiClient, UsuarioApiClient>(client =>
+{
+    client.BaseAddress = new Uri(baseUrl);
+});
+
+
+👉 O IHttpClientFactory é gerenciado automaticamente pelo .NET.
+Ou seja:
+
+O container cria uma instância de HttpClient configurada conforme o delegate acima.
+
+Essa instância é injetada no construtor do UsuarioApiClient.
+
+📄 UsuarioApiClient.cs
+
+public class UsuarioApiClient : IUsuarioApiClient
+{
+    private readonly HttpClient _httpClient;
+
+    public UsuarioApiClient(HttpClient httpClient) // <-- vem do IHttpClientFactory internamente
+    {
+        _httpClient = httpClient;
+    }
+
+    public async Task<UsuarioExternoResponse?> ObterUsuarioPorEmailAsync(string email, string token, CancellationToken cancellationToken = default)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, $"usuarios?email={Uri.EscapeDataString(email)}");
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        var response = await _httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<UsuarioExternoResponse>(cancellationToken: cancellationToken);
+    }
+}
+
+
+✅ Vantagens:
+
+Usa o pool de conexões automático do IHttpClientFactory
+
+Nenhum acoplamento com a factory dentro da classe
+
+Melhor para testes (você pode mockar IUsuarioApiClient facilmente)
+
+⚙️ 2. Forma alternativa — usando IHttpClientFactory explicitamente
+
+Se você quiser criar o HttpClient dinamicamente dentro da classe (ex: com diferentes tokens, rotas ou serviços), aí sim você injeta e usa diretamente a factory:
+
+📄 UsuarioApiClient.cs
+
+using System.Net.Http;
+using System.Net.Http.Json;
+
+namespace bff.projeto.Infra.HttpClients;
+
+public class UsuarioApiClient : IUsuarioApiClient
+{
+    private readonly IHttpClientFactory _httpClientFactory;
+
+    public UsuarioApiClient(IHttpClientFactory httpClientFactory)
+    {
+        _httpClientFactory = httpClientFactory;
+    }
+
+    public async Task<UsuarioExternoResponse?> ObterUsuarioPorEmailAsync(string email, string token, CancellationToken cancellationToken = default)
+    {
+        var client = _httpClientFactory.CreateClient("UsuarioApi"); // nome configurado no DI
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.GetAsync($"usuarios?email={Uri.EscapeDataString(email)}", cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<UsuarioExternoResponse>(cancellationToken: cancellationToken);
+    }
+}
+
+
+E no registro:
+
+📄 HttpClientConfiguration.cs
+
+services.AddHttpClient("UsuarioApi", client =>
+{
+    client.BaseAddress = new Uri(configuration["ExternalApis:UsuariosBaseUrl"]!);
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+services.AddScoped<IUsuarioApiClient, UsuarioApiClient>();
+
+
+✅ Vantagens dessa forma:
+
+Pode criar vários clientes nomeados ou tipados dinamicamente
+
+Permite alterar o header Authorization dentro do método
+
+Útil quando diferentes endpoints exigem tokens diferentes
+
+🧠 Comparativo rápido
+
+🧠 Comparativo rápido
+Cenário	Forma 1 (tipada)	Forma 2 (factory explícita)
+Simplicidade	✅ mais simples	⚙️ mais flexível
+Performance	✅ mesmo desempenho (ambas usam pooling)	✅ mesmo desempenho
+Testabilidade	✅ alta (mock fácil)	✅ alta (mock fácil)
+Controle sobre headers	⚠️ menor (usa configuração global)	✅ total controle
+
+
+✅ Recomendação para seu BFF
+
+👉 Como seu BFF chama APIs externas autenticadas (com token JWT), o ideal é:
+
+usar a segunda forma (IHttpClientFactory explícita),
+
+criar um AuthenticateHttpClientFactory (para gerenciar tokens),
+
+e injetar ele no UsuarioApiClient.
+
+Assim você terá testes simples + autenticação centralizada.
+
+Perfeito 👏 — vamos montar agora o padrão completo:
+um AuthenticateHttpClientFactory que gera HttpClients autenticados automaticamente com token,
+e o UsuarioApiClient usando isso corretamente.
+
+A ideia é manter tudo limpo, testável e em camadas, seguindo sua estrutura BFF.
+
+Estrutura envolvida
+
+📁 bff.projeto.Infra/HttpClients/
+
+IUsuarioApiClient.cs
+UsuarioApiClient.cs
+IAuthenticateHttpClientFactory.cs
+AuthenticateHttpClientFactory.cs
+
+
+📁 bff.projeto.Infra/Configurations/
+
+HttpClientConfiguration.cs
+
+
+📁 bff.projeto.Application/Contracts/
+
+IUsuarioService.cs
+
+🧩 Interface — IAuthenticateHttpClientFactory.cs
+namespace bff.projeto.Infra.HttpClients;
+
+public interface IAuthenticateHttpClientFactory
+{
+    Task<HttpClient> CreateAuthenticatedClientAsync(string clientName, CancellationToken cancellationToken = default);
+}
+
+⚙️ Implementação — AuthenticateHttpClientFactory.cs
+
+Essa factory centraliza o processo de:
+
+Criar o HttpClient via IHttpClientFactory
+
+Obter o token (de cache, banco ou API externa)
+
+Adicionar o header Authorization automaticamente
+Adicionar o header Authorization automaticamente
+
+using System.Net.Http.Headers;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Configuration;
+
+namespace bff.projeto.Infra.HttpClients;
+
+public class AuthenticateHttpClientFactory : IAuthenticateHttpClientFactory
+{
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IMemoryCache _cache;
+    private readonly IConfiguration _configuration;
+
+    public AuthenticateHttpClientFactory(
+        IHttpClientFactory httpClientFactory,
+        IMemoryCache cache,
+        IConfiguration configuration)
+    {
+        _httpClientFactory = httpClientFactory;
+        _cache = cache;
+        _configuration = configuration;
+    }
+
+    public async Task<HttpClient> CreateAuthenticatedClientAsync(string clientName, CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(cancellationToken);
+
+        var client = _httpClientFactory.CreateClient(clientName);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        return client;
+    }
+
+    private async Task<string> GetAccessTokenAsync(CancellationToken cancellationToken)
+    {
+        if (_cache.TryGetValue("ExternalApiToken", out string? token) && !string.IsNullOrEmpty(token))
+            return token;
+
+        // Exemplo: obter token de uma API externa
+        var authClient = _httpClientFactory.CreateClient("AuthApi");
+
+        var response = await authClient.PostAsJsonAsync("token", new
+        {
+            client_id = _configuration["ExternalApis:Auth:ClientId"],
+            client_secret = _configuration["ExternalApis:Auth:ClientSecret"]
+        }, cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadFromJsonAsync<AuthResponse>(cancellationToken: cancellationToken);
+        token = result?.AccessToken ?? throw new InvalidOperationException("Token inválido");
+
+        // Cache por 50 minutos
+        _cache.Set("ExternalApiToken", token, TimeSpan.FromMinutes(50));
+
+        return token;
+    }
+
+    private record AuthResponse(string AccessToken);
+}
+
+🧩 Cliente autenticado — UsuarioApiClient.cs
+using System.Net.Http.Json;
+
+namespace bff.projeto.Infra.HttpClients;
+
+public class UsuarioApiClient : IUsuarioApiClient
+{
+    private readonly IAuthenticateHttpClientFactory _authClientFactory;
+
+    public UsuarioApiClient(IAuthenticateHttpClientFactory authClientFactory)
+    {
+        _authClientFactory = authClientFactory;
+    }
+
+    public async Task<UsuarioExternoResponse?> ObterUsuarioPorEmailAsync(string email, string token, CancellationToken cancellationToken = default)
+    {
+        var client = await _authClientFactory.CreateAuthenticatedClientAsync("UsuarioApi", cancellationToken);
+
+        var response = await client.GetAsync($"usuarios?email={Uri.EscapeDataString(email)}", cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<UsuarioExternoResponse>(cancellationToken: cancellationToken);
+    }
+}
+
+🧩 Registro no container — HttpClientConfiguration.cs
+using Microsoft.Extensions.DependencyInjection;
+using bff.projeto.Infra.HttpClients;
+
+namespace bff.projeto.Infra.Configurations;
+
+public static class HttpClientConfiguration
+{
+    public static IServiceCollection AddHttpClientConfigurations(this IServiceCollection services, IConfiguration configuration)
+    {
+        var usuarioApiBaseUrl = configuration["ExternalApis:UsuariosBaseUrl"];
+        var authApiBaseUrl = configuration["ExternalApis:Auth:BaseUrl"];
+
+        // Clientes nomeados
+        services.AddHttpClient("UsuarioApi", client =>
+        {
+            client.BaseAddress = new Uri(usuarioApiBaseUrl ?? throw new InvalidOperationException("External API base URL not configured"));
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
+
+        services.AddHttpClient("AuthApi", client =>
+        {
+            client.BaseAddress = new Uri(authApiBaseUrl ?? throw new InvalidOperationException("Auth API base URL not configured"));
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
+
+        // Factorys e serviços
+        services.AddMemoryCache();
+        services.AddScoped<IAuthenticateHttpClientFactory, AuthenticateHttpClientFactory>();
+        services.AddScoped<IUsuarioApiClient, UsuarioApiClient>();
+
+        return services;
+    }
+}
+
+
+📄 Exemplo no appsettings.Development.json:
+
+{
+  "ExternalApis": {
+    "UsuariosBaseUrl": "https://api.externa.com/",
+    "Auth": {
+      "BaseUrl": "https://auth.externa.com/",
+      "ClientId": "bff-app",
+      "ClientSecret": "super-secreto"
+    }
+  }
+}
+
+✅ Uso no Application
+public class UsuarioService : IUsuarioService
+{
+    private readonly IUsuarioApiClient _usuarioApiClient;
+
+    public UsuarioService(IUsuarioApiClient usuarioApiClient)
+    {
+        _usuarioApiClient = usuarioApiClient;
+    }
+
+    public async Task<UsuarioResponse?> ObterUsuarioAsync(string email, CancellationToken cancellationToken)
+    {
+        // O token é gerenciado internamente pelo factory
+        var usuario = await _usuarioApiClient.ObterUsuarioPorEmailAsync(email, string.Empty, cancellationToken);
+        return usuario == null ? null : new UsuarioResponse(usuario.Id, usuario.Nome, usuario.Email);
+    }
+}
+
+🧪 Testabilidade
+
+Você pode mockar qualquer uma dessas interfaces:
+
+IAuthenticateHttpClientFactory
+
+IUsuarioApiClient
+
+IUsuarioService
+
+Exemplo:
+
+var mockFactory = new Mock<IAuthenticateHttpClientFactory>();
+var httpClient = new HttpClient(new FakeHttpMessageHandler());
+mockFactory.Setup(f => f.CreateAuthenticatedClientAsync("UsuarioApi", It.IsAny<CancellationToken>()))
+           .ReturnsAsync(httpClient);
+
+
+✅ Assim você testa o UsuarioService sem chamar APIs reais.
+
+🧭 Benefícios da arquitetura
+Camada	Responsabilidade	Testável?
+AuthenticateHttpClientFactory	Obter e cachear token JWT	✅
+UsuarioApiClient	Chamar API externa com HttpClient autenticado	✅
+UsuarioService	Lógica de negócio e integração entre camadas	✅
+HttpClientFactory	Gerenciamento de HttpClient pool	🔁 automático
