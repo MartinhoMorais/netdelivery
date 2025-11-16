@@ -1,0 +1,94 @@
+﻿
+public class CachedItem<T>
+{
+    private readonly SemaphoreSlim _semaphore = new(1);
+    private readonly Func<Task<T>> _taskFactory;
+
+    public CachedItem(Func<Task<T>> taskFactory)
+    {
+        _taskFactory = taskFactory;
+    }
+
+    public CachedItem(T value)
+    {
+        Value = value;
+    }
+
+    private T Value { get; set; }
+
+    public async Task<T> GetValueAsnc()
+    {
+        if (Value != null)
+            return Value;
+
+        await _semaphore.WaitAsync();
+        try
+        {
+            if (Value == null)
+                Value = await _taskFactory();
+
+            return Value;
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+}
+public class MemoryCache : ICache
+{
+    private readonly Microsoft.Extensions.Caching.Memory.MemoryCache cache;
+    private readonly SemaphoreSlim semaphore = new(1);
+
+    public MemoryCache()
+    {
+        cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(new MemoryCacheOptions());
+    }
+
+    public Task<T> Get<T>(string key)
+    {
+        if (cache.TryGetValue<CachedItem<T>>(key, out var result))
+            return result!.GetValueAsnc();
+
+        return Task.FromResult(default(T));
+    }
+
+    public async Task<T> GetOrAddAsync<T>(string key, Func<Task<T>> taskFactory, TimeSpan? expires = null)
+    {
+        await semaphore.WaitAsync();
+
+        CachedItem<T> cached;
+
+        try
+        {
+            cached = (await cache.GetOrCreateAsync(key, entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = expires;
+                return Task.FromResult(new CachedItem<T>(taskFactory));
+            }))!;
+        }
+        finally
+        {
+            semaphore.Release();
+        }
+
+        return await cached.GetValueAsnc();
+    }
+
+    public void Set<T>(string key, T value, TimeSpan? expires = null)
+    {
+        if (expires.HasValue)
+            cache.Set(key, new CachedItem<T>(value), expires.Value);
+        else
+            cache.Set(key, new CachedItem<T>(value));
+    }
+}
+
+
+//----------------
+public static class CacheKeys
+{
+    public const string AUTH_TOKEN = "@SISTEMA_AUTH_TOKEN";
+
+    public const string USUARIO_MAX_MODIFIED = "@SISTEMA_USUARIO_MAX_MODIFIED";
+}
