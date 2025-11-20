@@ -1,0 +1,63 @@
+﻿📌 User Story — Solicitação de Formalização LIVENESS (Versão Simplificada para PO)
+⭐ Como usuário do sistema de Assessorias
+
+Quero solicitar a formalização LIVENESS
+Para que o processo de formalização seja iniciado, analisado e concluído de forma automática e segura.
+
+📘 Descrição Simplificada do Fluxo
+
+O sistema de Assessorias envia um pedido de formalização para o nosso serviço interno de Formalização.
+
+O serviço de Formalização recebe o pedido e registra as informações recebidas.
+
+Esse serviço encaminha o pedido para outro módulo responsável por distribuir mensagens entre os demais sistemas.
+
+O módulo de distribuição envia a formalização para o sistema que irá analisá-la.
+
+O sistema responsável pela análise processa a mensagem, valida os dados e registra o andamento.
+
+Se os dados estiverem corretos, o sistema envia essas informações para um sistema corporativo responsável por continuar a formalização.
+
+Após o retorno positivo desse sistema corporativo, uma notificação é enviada e o status “formalizado” é distribuído internamente.
+
+Outro módulo do sistema recebe o status “formalizado”, processa a confirmação e devolve o status final ao serviço original de Formalização.
+
+O serviço de Formalização registra o status final e envia a etapa seguinte para aprovação de acordo.
+
+🎯 Objetivo da US
+
+Garantir que todo o processo de solicitação, análise, confirmação e finalização da formalização LIVENESS ocorra de ponta a ponta, de forma integrada entre todos os sistemas envolvidos.
+
+📌 Critérios de Aceitação (Simples e PO-friendly)
+
+ O sistema deve receber pedidos de formalização vindos do sistema de Assessorias.
+
+ O serviço de Formalização deve registrar o pedido recebido.
+
+ O pedido deve ser encaminhado automaticamente para o módulo responsável por distribuir mensagens.
+
+ O sistema que analisa a formalização deve receber o pedido.
+
+ A análise deve validar se as informações são suficientes e consistentes.
+
+ Em caso de sucesso, o sistema deve enviar o pedido ao sistema corporativo responsável.
+
+ O sistema corporativo deve retornar uma confirmação de recebimento.
+
+ Após o retorno positivo, deve ser enviada uma notificação interna de que a formalização foi concluída.
+
+ O status final deve retornar ao serviço de Formalização.
+
+ O serviço de Formalização deve registrar o status final e enviar o processo para a próxima etapa (aprovação de acordo).
+
+🚫 Critérios de Não Aceitação
+
+A US não contempla erros técnicos ou detalhes de infraestrutura.
+
+A US não aborda regras específicas de validação corporativa.
+
+A US não detalha os mecanismos internos de mensagens ou filas.
+
+📄 Nota para o Time Técnico
+
+Os detalhes sobre mensageria, filas, tópicos, consumidores, logs, DLQ, retries e integrações técnicas serão documentados na documentação técnica separada, esta US é apenas a visão funcional.

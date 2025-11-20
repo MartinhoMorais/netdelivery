@@ -1,0 +1,80 @@
+﻿sequenceDiagram
+    autonumber
+
+    participant API_Assessorias as api-assessorias<br/>(externa)
+    participant API_Formalizacao as api-formalizacao<br/>(microservice)
+    participant SQL as SQL Server
+    participant PDC_Formalizar as api-pdc-formalizar<br/>(produtor)
+    participant Kafka_TP_Form as Kafka<br/>topic: tp-formalizar<br/>group: gc-formalizar
+    participant CSM_Formalizacao as api-csm-formalizacao<br/>(consumer)
+    participant DLQ_Form as DLQ<br/>dlq-formalizar
+    participant API_FormCorp as api-formalizacao-corp<br/>(externa)
+    participant API_Notificacao as api-notificacao
+    participant Kafka_TP_Formalizado as Kafka<br/>topic: tp-formalizado<br/>group: gc-formalizado
+    participant CSM_Formalizado as api-csm-formalizado
+    participant DLQ_Formalizado as DLQ<br/>dlq-formalizado
+    participant Kafka_AprovarAcordo as Kafka<br/>topic: tp-aprovar-acordo<br/>group: gc-aprovar-acordo
+
+    %% 1 - api-assessorias envia solicitação
+    API_Assessorias->>API_Formalizacao: POST /formalizacao (dados da solicitação)
+
+    %% 2 - api-formalizacao grava log
+    API_Formalizacao->>SQL: INSERT LogFormalizacao (payload recebido)
+
+    %% 3 - api-formalizacao envia para produtor
+    API_Formalizacao->>PDC_Formalizar: POST /produzir-mensagem (dados formalização)
+
+    %% 4 - produtor publica no Kafka
+    PDC_Formalizar->>Kafka_TP_Form: Publish(dados formalização)
+
+    %% 5 - Kafka distribuindo mensagem
+    Kafka_TP_Form->>CSM_Formalizacao: Deliver message
+
+    %% 6 - api-csm-formalizacao processa
+    loop Retry 3x
+        CSM_Formalizacao->>CSM_Formalizacao: Processar mensagem
+    end
+
+    CSM_Formalizacao->>SQL: INSERT LogConsumerFormalizacao
+
+    alt Falha após 3 tentativas
+        CSM_Formalizacao->>DLQ_Form: Enviar mensagem para DLQ
+        Note over CSM_Formalizacao,DLQ_Form: Mensagem inválida ou mal formatada
+    else Sucesso
+        %% 7 - envia requisição para api-formalizacao-corp
+        CSM_Formalizacao->>API_FormCorp: POST /formalizacao-corp (payload válido)
+
+        %% Ao enviar sucesso
+        API_FormCorp-->>CSM_Formalizacao: OK recebido
+
+        %% envia notificação
+        CSM_Formalizacao->>API_Notificacao: POST /notificar (status OK)
+
+        %% publica status OK no Kafka
+        CSM_Formalizacao->>Kafka_TP_Formalizado: Publish(status OK)
+    end
+
+    %% 8 - consumo do tp-formalizado
+    Kafka_TP_Formalizado->>CSM_Formalizado: Deliver message
+
+    loop Retry 3x
+        CSM_Formalizado->>CSM_Formalizado: Processar mensagem formalizada
+    end
+
+    CSM_Formalizado->>SQL: INSERT LogConsumerFormalizado
+
+    alt Falha após 3 tentativas
+        CSM_Formalizado->>DLQ_Formalizado: DLQ (mensagem formalizada)
+    else Sucesso
+        %% envia mensagem para api-formalizacao
+        CSM_Formalizado->>API_Formalizacao: POST /formalizacao/status-ok
+    end
+
+    %% 8.1 - api-formalizacao registra log
+    API_Formalizacao->>SQL: INSERT LogFormalizacao (status OK)
+
+    %% 9 - envia para produtor novamente
+    API_Formalizacao->>PDC_Formalizar: POST /produzir-mensagem (status OK)
+
+    %% 10 - publicar mensagem no tópico de aprovação de acordo
+    PDC_Formalizar->>Kafka_AprovarAcordo: Publish(tp-aprovar-acordo, status OK)

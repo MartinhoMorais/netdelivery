@@ -1,0 +1,312 @@
+﻿# 🧩 User Story — Solicitação de Formalização LIVENESS
+
+---
+
+## 🟦 1. Contexto
+Quando um cliente passa pelo processo de Liveness, é necessário formalizar a validação final do processo em diversos sistemas internos.  
+Essa formalização ocorre por meio de troca de mensagens entre APIs internas e plataformas de mensageria (Kafka), garantindo:
+
+- Rastreabilidade  
+- Integridade dos dados  
+- Retry automático  
+- Encaminhamento para DLQ em caso de falhas  
+- Logs completos em SQL Server
+
+O objetivo é padronizar esse fluxo ponta a ponta.
+
+---
+
+## 🟦 2. História (Como PO)
+**Como** área responsável pelo fluxo de formalização Liveness  
+**Quero** que as solicitações de formalização sejam processadas de ponta a ponta, de forma integrada e resiliente  
+**Para** garantir que o processo seja formalizado corretamente em todos os sistemas internos e externos
+
+---
+
+## 🟦 3. Fluxo Geral da Solução
+
+### 🔹 **Passo 1 — API externa envia solicitação**
+A API externa `api-assessorias` envia um request HTTP para o endpoint da **api-formalizacao** contendo os dados da formalização Liveness.
+
+---
+
+### 🔹 **Passo 2 — api-formalizacao registra o pedido**
+A **api-formalizacao**:
+- Valida o request recebido  
+- Armazena log no SQL Server  
+- Prepara a mensagem para envio ao produtor  
+
+---
+
+### 🔹 **Passo 3 — api-formalizacao → api-pdc-formalizar (producer)**
+A **api-formalizacao** envia uma requisição para o produtor de mensagens **api-pdc-formalizar**, contendo o payload da formalização.
+
+---
+
+### 🔹 **Passo 4 — Producer publica no Kafka**
+O produtor **api-pdc-formalizar** publica a mensagem no:
+
+- **Topic:** `tp-formalizar`  
+- **Consumer Group:** `gc-formalizar`
+
+---
+
+### 🔹 **Passo 5 — Kafka configurado**
+O Kafka deve estar configurado com:
+- Topic → `tp-formalizar`
+- Group → `gc-formalizar`
+- DLQ → `dlq-formalizar`
+
+---
+
+### 🔹 **Passo 6 — api-csm-formalizacao consome a formalização**
+A API consumer **api-csm-formalizacao**:
+
+- Lê mensagens do topic `tp-formalizar`
+- Possui retry automático de 3 tentativas
+- Grava log no SQL Server
+
+**Se falhar:**
+- Mensagem vai para DLQ → `dlq-formalizar`
+
+**Regras de validação para DLQ:**
+- Mensagem incompleta  
+- Campos obrigatórios ausentes  
+- Payload mal formatado  
+- Email ou ID inválido  
+- Estrutura divergente do schema definido  
+
+---
+
+### 🔹 **Passo 7 — api-csm-formalizacao → api-formalizacao-corp (externa)**
+Caso o processamento seja bem-sucedido:
+
+- A **api-csm-formalizacao** chama a API externa `api-formalizacao-corp`  
+- Envia payload padronizado com dados de formalização  
+- Em seguida, envia mensagem de status **OK** para:
+  - Topic: `tp-formalizado`
+  - Group: `gc-formalizado`
+
+> *A api-formalizacao-corp é externa e não será detalhada.*
+
+---
+
+### 🔹 **Passo 8 — api-csm-formalizado consome status OK**
+A API consumer **api-csm-formalizado**:
+
+- Consome mensagens do topic `tp-formalizado`
+- Aplica retry de 3 tentativas
+- Loga no SQL Server
+
+**Se falhar:**  
+- Mensagem segue para DLQ → `dlq-formalizado`
+
+**Em caso de sucesso:**  
+- Envia request para **api-formalizacao** informando “processo formalizado com sucesso”.
+
+---
+
+### 🔹 **Passo 9 — api-formalizacao recebe retorno final**
+A **api-formalizacao**:
+
+- Recebe o status OK  
+- Grava log no SQL Server  
+- Reencaminha o status ao producer **api-pdc-formalizar**
+
+---
+
+### 🔹 **Passo 10 — api-pdc-formalizar envia para Kafka (aprovação de acordo)**
+A **api-pdc-formalizar** publica:
+
+- **Topic:** `tp-aprovar-acordo`
+- **Group:** `gc-aprovar-acordo`
+
+---
+
+# 🟦 4. Payloads (propostas)
+
+### 📤 Payload de entrada – api-assessorias → api-formalizacao
+```json
+{
+  "idCliente": "string",
+  "documento": "string",
+  "nomeCompleto": "string",
+  "dataLiveness": "2025-01-05T10:30:00Z",
+  "scoreLiveness": 0.98,
+  "canalOrigem": "app"
+}
+
+
+📤 Payload da formalização OK – api-csm-formalizacao → api-formalizacao-corp
+{
+  "idCliente": "string",
+  "documento": "string",
+  "resultado": "Aprovado",
+  "dataProcessamento": "2025-01-05T10:31:30Z"
+}
+
+🟦 5. Regras de Negócio
+Regras para envio à DLQ (formalização)
+
+idCliente vazio
+
+documento inválido
+
+scoreLiveness menor que 0
+
+Data mal formatada
+
+JSON inválido
+
+Campos obrigatórios ausentes
+
+Estrutura diferente do schema cadastrado
+
+Regras para aprovação
+
+score >= 0.5
+
+documento válido
+
+payload íntegro
+
+🟦 6. Critérios de Aceitação
+
+ api-formalizacao deve receber e validar payload da formalização.
+
+ api-formalizacao deve salvar log no SQL Server.
+
+ api-formalizacao deve encaminhar a mensagem ao producer.
+
+ Producer deve publicar em tp-formalizar.
+
+ api-csm-formalizacao deve consumir, processar, validar e aplicar retry.
+
+ api-csm-formalizacao deve enviar para DLQ em erros definitivos.
+
+ api-csm-formalizacao deve enviar formalização para api-formalizacao-corp.
+
+ api-csm-formalizacao deve publicar status em tp-formalizado.
+
+ api-csm-formalizado deve consumir, aplicar retry e DLQ.
+
+ api-csm-formalizado deve enviar status OK para api-formalizacao.
+
+ api-formalizacao deve enviar requisição final ao producer.
+
+ Producer deve publicar em tp-aprovar-acordo.
+
+🟦 7. Definition of Ready (DoR)
+
+ Payload validado
+
+ Topics criados
+
+ DLQs configuradas
+
+ Regras de negócio fechadas
+
+ API externa mapeada
+
+🟦 8. Definition of Done (DoD)
+
+ Testes unitários
+
+ Testes de integração
+
+ Logs SQL Server funcionando
+
+ Retry validado
+
+ DLQ testada
+
+ Documentação atualizada
+
+ Mensagens fluindo ponta a ponta
+
+🧱 TASKS DA USER STORY
+🔹 Task 1 — Análise Técnica
+
+Ler fluxo, validar dependências e payloads.
+
+🔹 Task 2 — Criar contrato das mensagens
+
+Formalizar schema JSON
+
+Publicar contrato
+
+🔹 Task 3 — Criar Topics e DLQs no Kafka
+
+tp-formalizar
+
+dlq-formalizar
+
+tp-formalizado
+
+dlq-formalizado
+
+tp-aprovar-acordo
+
+🔹 Task 4 — Implementar api-formalizacao (entrada)
+
+Endpoint de recebimento
+
+Logs no SQL Server
+
+Requisição para producer
+
+🔹 Task 5 — Producer api-pdc-formalizar
+
+Publicar nos topics corretos
+
+Retry de publicação
+
+🔹 Task 6 — Implementar api-csm-formalizacao
+
+Consumer tp-formalizar
+
+Validações
+
+Retry
+
+DLQ
+
+request para api-formalizacao-corp
+
+publicar em tp-formalizado
+
+🔹 Task 7 — Implementar api-csm-formalizado
+
+Consumer tp-formalizado
+
+Retry
+
+DLQ
+
+envio para api-formalizacao
+
+🔹 Task 8 — api-formalizacao (saída final)
+
+Receber retorno
+
+Log
+
+Enviar ao producer
+
+🔹 Task 9 — Tests
+
+Unitários
+
+Integração Kafka
+
+Integração APIs
+
+🔹 Task 10 — Documentação final
+
+Fluxos
+
+Payloads
+
+Topics
+
+DLQs

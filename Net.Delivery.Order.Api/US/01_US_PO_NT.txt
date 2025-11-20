@@ -1,0 +1,165 @@
+﻿📌 User Story — Solicitação de Formalização LIVENESS
+
+(Versão clara e simplificada, estilo PO não técnico)
+
+📝 Descrição
+
+Esta User Story descreve o fluxo completo da solicitação de formalização LIVENESS, desde o momento em que o pedido chega pelo sistema de Assessorias até o retorno do status final de formalização.
+O processo envolve o recebimento da solicitação, validação das informações, envio para outros serviços internos e externos, e retorno do status final para continuidade do fluxo de negócios.
+
+🎯 Objetivo do Negócio
+
+Garantir que o processo de formalização LIVENESS seja executado de ponta a ponta, de forma automática, integrada e confiável, reduzindo tempo de processamento, diminuindo falhas manuais e proporcionando melhor experiência ao usuário final e aos parceiros envolvidos.
+
+💼 Necessidade do Negócio
+
+Automatizar o recebimento e tratamento das solicitações de formalização.
+
+Assegurar que todas as informações recebidas sejam validadas e registradas.
+
+Integrar com outros serviços internos e externos sem intervenção manual.
+
+Registrar o andamento e o resultado da formalização para auditoria e acompanhamento.
+
+Enviar o status final da formalização para continuidade do fluxo (ex.: aprovação de acordo).
+
+📘 Regras de Negócio
+
+Toda solicitação de formalização deve ser registrada no sistema ao ser recebida.
+
+A formalização somente deve seguir para os sistemas seguintes caso contenha informações mínimas necessárias.
+
+O processo deve aguardar a confirmação de recebimento do sistema corporativo responsável pela formalização.
+
+O status final da formalização deve ser retornado ao serviço de origem.
+
+O sistema deve permitir rastrear todo o fluxo da formalização através dos registros gerados.
+
+Em caso de inconsistência ou dados incompletos, o processo não deve seguir adiante.
+
+✔ Critérios de Aceite
+
+Para considerar esta User Story entregue, deve ser possível:
+
+ Receber solicitações de formalização vindas do sistema de Assessorias.
+
+ Registrar a solicitação e seu conteúdo no sistema.
+
+ Encaminhar automaticamente a formalização para o serviço responsável por análise.
+
+ Analisar e validar as informações da formalização.
+
+ Enviar a formalização validada ao sistema corporativo responsável pelo processamento.
+
+ Registrar o retorno do sistema corporativo.
+
+ Enviar uma notificação interna quando a formalização for concluída com sucesso.
+
+ Receber e processar o status final da formalização.
+
+ Registrar o status final no sistema.
+
+ Enviar o processo para a próxima etapa do fluxo (aprovação de acordo).
+
+🏁 Critérios de Conclusão (DoD — Definition of Done)
+
+A User Story será considerada concluída quando:
+
+ Todo o fluxo funcional descrito estiver implementado.
+
+ Testes funcionais cobrirem o fluxo principal ponta a ponta.
+
+ Todas as integrações envolvidas tiverem sido validadas.
+
+ Logs essenciais do fluxo estiverem sendo gerados.
+
+ Documentação funcional e técnica atualizada com o fluxo final.
+
+ Homologação concluída com aprovação do PO.
+
+ Feature implantada em ambiente de produção com monitoramento ativo.
+
+
+
+#######################
+📌 User Story — Solicitação de Formalização LIVENESS
+
+(Versão clara, simplificada e estilo PO não técnico)
+
+📝 Descrição (Eu / Quero / Para que)
+
+Eu, como usuário do sistema de Assessorias,
+Quero enviar uma solicitação de formalização LIVENESS para o nosso serviço interno,
+Para que o processo de formalização seja analisado, confirmado e concluído automaticamente, garantindo agilidade, rastreabilidade e continuidade do fluxo de negócio.
+
+🎯 Objetivo do Negócio
+
+Garantir que todo o processo de formalização LIVENESS seja realizado de forma automática, integrada e confiável, reduzindo tempo de processamento e aumentando a eficiência operacional, além de melhorar a experiência dos parceiros e usuários envolvidos.
+
+💼 Necessidade do Negócio
+
+Automatizar o fluxo de formalização do início ao fim.
+
+Reduzir dependência de tarefas manuais e falhas humanas.
+
+Validar e registrar todas as informações recebidas para auditoria.
+
+Integrar serviços internos e externos mantendo consistência do processo.
+
+Permitir continuidade do fluxo de acordos após a formalização.
+
+📘 Regras de Negócio
+
+Toda solicitação de formalização deve ser registrada ao chegar ao sistema.
+
+Só deve avançar no processo uma solicitação que contenha dados mínimos obrigatórios.
+
+O processo deve aguardar retorno do sistema corporativo responsável pela formalização.
+
+O status final precisa ser devolvido ao serviço de origem que iniciou o fluxo.
+
+O sistema deve registrar logs essenciais para permitir rastreamento completo.
+
+Se a solicitação contiver dados inconsistentes, o processo não pode seguir adiante.
+
+✔ Critérios de Aceite
+
+A entrega desta US será aceita quando:
+
+ O sistema receber solicitações de formalização do sistema de Assessorias.
+
+ A solicitação for registrada com seus dados essenciais.
+
+ A formalização for encaminhada automaticamente para o serviço analisador.
+
+ O serviço analisador validar as informações recebidas.
+
+ A formalização validada for enviada ao sistema corporativo.
+
+ O retorno do sistema corporativo for registrado.
+
+ Uma notificação interna for enviada após a conclusão com sucesso.
+
+ O status final retornar ao serviço de formalização.
+
+ O status final for registrado.
+
+ A etapa seguinte (aprovação de acordo) for acionada corretamente.
+
+🏁 Critérios de Conclusão (DoD — Definition of Done)
+
+A US será considerada concluída quando:
+
+ O fluxo funcional ponta a ponta estiver implementado.
+
+ Testes funcionais cobrirem os principais cenários.
+
+ Integrações externas e internas estiverem validadas.
+
+ Logs essenciais estiverem ativos e funcionando.
+
+ Documentação atualizada (funcional + técnica).
+
+ Homologação validada pelo PO.
+
+ Funcionalidade implantada em produção com monitoramento.

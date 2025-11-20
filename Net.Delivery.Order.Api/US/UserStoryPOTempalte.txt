@@ -1,0 +1,68 @@
+﻿# 📌 User Story — [Título da US]
+
+---
+
+## 📝 Descrição (Eu / Quero / Para que)
+**Eu**, como [tipo de usuário],  
+**Quero** [o que deseja],  
+**Para que** [benefício ou resultado esperado].
+
+---
+
+## 🎯 Objetivo do Negócio
+[Explique claramente o que o negócio pretende alcançar com esta US. Ex.: Agilizar atendimento, automatizar processo, reduzir erros, etc.]
+
+---
+
+## 💼 Necessidade do Negócio
+[Explique o motivo da demanda. Por que isso é necessário? O que motivou? Qual problema resolve?]
+
+---
+
+## 📘 Regras de Negócio
+1. [Regra de negócio 1]
+2. [Regra de negócio 2]
+3. [Regra de negócio 3]
+4. [...]
+
+---
+
+## ✔ Critérios de Aceite
+- [ ] [Critério que deve ser atendido]
+- [ ] [Critério que valida funcionamento principal]
+- [ ] [Critério que confirma integração/comportamento esperado]
+- [ ] [...]
+
+---
+
+## 🏁 Critérios de Conclusão (DoD — Definition of Done)
+- [ ] Implementação concluída conforme requisitos
+- [ ] Testes funcionais realizados e aprovados
+- [ ] Logs essenciais implementados
+- [ ] Documentação funcional e técnica atualizadas
+- [ ] Homologação aprovada pelo PO
+- [ ] Deploy realizado no ambiente destino
+
+---
+
+## 📌 Tasks (Opcional — remover se não utilizar)
+### 🔧 Desenvolvimento
+- [ ] [Task de implementação 1]
+- [ ] [Task de implementação 2]
+- [ ] [...]
+
+### 🔍 Testes
+- [ ] [Cenário 1]
+- [ ] [Cenário 2]
+- [ ] [...]
+
+### 📄 Documentação
+- [ ] [Atualizar documentação A]
+- [ ] [Registrar fluxo B]
+- [ ] [...]
+
+---
+
+## 📎 Anexos / Observações
+[Links, documentos, diagramas, prints, informações extras]
+
