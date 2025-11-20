@@ -1,0 +1,199 @@
+﻿# 📌 Tasks da US: [Código/Identificador da US] — [Título da US]
+
+---
+
+## 🟦 1. Task: Análise Técnica da US
+**Responsável:** [nome]  
+**Descrição:**  
+- Ler e interpretar a US.
+- Verificar requisitos de negócio e técnicos.
+- Validar fluxos, payloads, contratos, APIs externas.
+- Identificar riscos, dependências e necessidades de infraestrutura.
+
+**Critérios de conclusão:**
+- [ ] Entendimento validado com o PO/Tech Lead  
+- [ ] Itens técnicos mapeados  
+- [ ] Dúvidas registradas e respondidas  
+
+---
+
+## 🟦 2. Task: Definição do Contrato da Mensagem (Kafka)
+**Responsável:** [nome]  
+**Descrição:**  
+- Criar ou revisar o esquema da mensagem (JSON/AVRO/Protobuf).
+- Documentar campos obrigatórios/opcionais.
+- Validar com squads dependentes.
+- Publicar no repositório de contratos.
+
+**Critérios de conclusão:**
+- [ ] Contrato aprovado pelo time  
+- [ ] Versionamento atualizado  
+- [ ] Documentação publicada  
+
+---
+
+## 🟦 3. Task: Configuração do Topic e Consumer Group
+**Responsável:** [nome]  
+**Descrição:**  
+- Criar ou validar existência do topic Kafka.  
+- Definir e documentar consumer group.  
+- Configurar particionamento e replicação conforme diretrizes.  
+
+**Critérios de conclusão:**
+- [ ] Topic criado/validado  
+- [ ] Consumer group definido  
+- [ ] Configuração documentada  
+
+---
+
+## 🟦 4. Task: Implementação do Consumer (.NET 8)
+**Responsável:** [nome]  
+**Descrição:**  
+- Implementar leitura da mensagem.  
+- Realizar parsing e validação inicial.  
+- Integrar com o serviço de processamento.  
+- Registrar logs essenciais.
+
+**Critérios de conclusão:**
+- [ ] Consumer funcional  
+- [ ] Tratamento de exceções aplicado  
+- [ ] Logs mínimos implementados  
+
+---
+
+## 🟦 5. Task: Implementação das Regras de Negócio
+**Responsável:** [nome]  
+**Descrição:**  
+- Implementar validações.  
+- Aplicar cálculos e regras definidas na US.  
+- Garantir consistência dos dados.  
+
+**Critérios de conclusão:**
+- [ ] Regras implementadas  
+- [ ] Regras validadas com o PO  
+- [ ] Casos alternativos cobertos  
+
+---
+
+## 🟦 6. Task: Integração com APIs Externas
+**Responsável:** [nome]  
+**Descrição:**  
+- Criar clientes HTTP ou usar Refit/HttpClientFactory.  
+- Implementar chamadas externas.  
+- Tratar erros, timeouts e latência.  
+
+**Critérios de conclusão:**
+- [ ] Chamadas funcionando  
+- [ ] Recuperação de falhas configurada  
+- [ ] Respostas validadas  
+
+---
+
+## 🟦 7. Task: Implementação de Retry e DLQ
+**Responsável:** [nome]  
+**Descrição:**  
+- Configurar estratégia de retry (quantidade, intervalo).  
+- Implementar condições para DLQ.  
+- Encaminhar mensagens inválidas para a fila de erro.  
+
+**Critérios de conclusão:**
+- [ ] Retry funcionando conforme definido  
+- [ ] DLQ testada com mensagem real  
+- [ ] Logs de erro capturados
+
+---
+
+## 🟦 8. Task: Persistência de Logs no SQL Server
+**Responsável:** [nome]  
+**Descrição:**  
+- Criar ou validar tabela de logs.  
+- Inserir registros de processamento, erros e status.  
+- Implementar repositório e serviço de escrita.  
+
+**Critérios de conclusão:**
+- [ ] Logs sendo registrados  
+- [ ] Testes de inserção realizados  
+- [ ] Estrutura documentada  
+
+---
+
+## 🟦 9. Task: Testes Unitários
+**Responsável:** [nome]  
+**Descrição:**  
+- Criar testes para regras de negócio.  
+- Mock de dependências (APIs, repos, Kafka).  
+
+**Critérios de conclusão:**
+- [ ] Cobertura mínima atingida  
+- [ ] Testes rodando no pipeline  
+- [ ] Cenários de erro validados  
+
+---
+
+## 🟦 10. Task: Testes de Integração (API / Kafka)
+**Responsável:** [nome]  
+**Descrição:**  
+- Garantir que o consumer lê corretamente.  
+- Testar integração com APIs externas.  
+- Verificar comportamento com DLQ.  
+
+**Critérios de conclusão:**
+- [ ] Mensagem real processada  
+- [ ] Integrações validadas  
+- [ ] Evidências anexadas  
+
+---
+
+## 🟦 11. Task: Testes Finais End-to-End
+**Responsável:** [nome]  
+**Descrição:**  
+- Fluxo completo desde envio ao topic até resposta final.  
+- Validação com time de QA/PO.  
+
+**Critérios de conclusão:**
+- [ ] Fluxo completo aprovado  
+- [ ] Evidências registradas  
+- [ ] Issues corrigidas  
+
+---
+
+## 🟦 12. Task: Documentação Final
+**Responsável:** [nome]  
+**Descrição:**  
+- Atualizar documentação técnica.  
+- Registrar contrato da mensagem.  
+- Documentar endpoints consumidos.  
+- Registrar exemplos de logs.  
+
+**Critérios de conclusão:**
+- [ ] Documento revisado  
+- [ ] Publicado no repositório oficial  
+- [ ] Checklist validado com o time  
+
+---
+
+## 🟦 13. Task: Preparação para Deploy / Observabilidade
+**Responsável:** [nome]  
+**Descrição:**  
+- Revisar health checks, métricas e logs.  
+- Verificar dashboards (Grafana, Kibana, App Insights).  
+- Validar variáveis de ambiente.  
+
+**Critérios de conclusão:**
+- [ ] Feature flag configurada (se houver)  
+- [ ] Observabilidade ajustada  
+- [ ] Pronto para deploy  
+
+---
+
+## 🟦 14. Task: Deploy + Smoke Test
+**Responsável:** [nome]  
+**Descrição:**  
+- Realizar deploy no ambiente.  
+- Executar smoke test (mínima validação).  
+- Monitorar logs iniciais.  
+
+**Critérios de conclusão:**
+- [ ] Deploy concluído  
+- [ ] Smoke test OK  
+- [ ] Sem erros críticos  

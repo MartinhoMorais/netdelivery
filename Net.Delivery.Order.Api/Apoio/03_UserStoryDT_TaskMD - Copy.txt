@@ -1,0 +1,263 @@
+﻿Aqui está um arquivo completo em Markdown, totalmente integrado, contendo:
+
+✅ User Story
+✅ Documentação Técnica
+✅ Tasks derivadas
+✅ Exemplo REAL aplicado ao microserviço de “Cadastro de Usuário” usando:
+
+.NET 8
+
+Kafka
+
+Consumer + Retry
+
+DLQ
+
+Logs em SQL Server
+
+Integração com API de Notificações
+
+Pronto para copiar/colar no Jira, Azure DevOps, GitHub Projects etc.
+
+# 🧩 User Story — Microserviço de Cadastro de Usuário
+
+---
+
+## 🟦 1. Propósito do Microserviço
+Este microserviço será responsável por receber solicitações de criação de usuários enviadas pelo portal, validar os dados, persistir no sistema interno e acionar notificações para outros sistemas quando o cadastro for concluído.
+
+---
+
+## 🟦 2. História (Como PO)
+**Como** área responsável pelo cadastro dos clientes  
+**Quero** que novas solicitações de usuários sejam processadas automaticamente  
+**Para** que os usuários possam ser registrados de forma rápida, validada e integrada com os sistemas internos
+
+---
+
+## 🟦 3. Fluxo de Alto Nível
+- O portal envia uma mensagem contendo os dados de cadastro para o Kafka.  
+- O microserviço consome a mensagem e valida os dados recebidos.  
+- Se tudo estiver correto, grava o usuário no banco interno.  
+- Caso contrário, gera erro tratado e aplica retry.  
+- Se, após as tentativas, ainda falhar, envia a mensagem para a DLQ.  
+- Após o cadastro, chama a API de Notificações para enviar e-mail de boas-vindas.  
+- Registra logs do processamento no banco SQL Server.
+
+---
+
+# 🟦 4. Detalhes Técnicos (Kafka / .NET 8)
+
+### 🎯 Topic consumido
+`usuarios.cadastro.v1`
+
+### 🎯 Consumer Group
+`cadastro-usuario-service`
+
+### 📌 Formato da mensagem (JSON)
+```json
+{
+  "nome": "string",
+  "email": "string",
+  "telefone": "string",
+  "dataNascimento": "yyyy-MM-dd"
+}
+
+
+📥 Validações de entrada
+
+Nome obrigatório
+
+E-mail válido e não duplicado
+
+Telefone obrigatório
+
+Idade mínima: 18 anos
+
+🟦 5. Regras de Negócio
+
+Se o e-mail já existir, rejeitar com erro permanente (DLQ).
+
+Se a API de Notificações estiver offline → retry.
+
+Dados incorretos → rejeição imediata.
+
+Somente persistir se todas as validações forem aprovadas.
+
+🟦 6. Comportamento de Erro e Resiliência
+🔁 Retry
+
+3 tentativas
+
+Intervalo: 10s / 30s / 60s
+
+Aplicar retry apenas quando:
+
+API de Notificações estiver indisponível
+
+Falha temporária de infraestrutura
+
+🗃 DLQ — Dead Letter Queue
+
+Topic DLQ: usuarios.cadastro.v1.dlq
+
+Enviar para DLQ quando:
+
+Mensagem inválida
+
+E-mail já cadastrado
+
+Campos obrigatórios ausentes
+
+Erro permanente após validação
+
+🟦 7. Logs e Auditoria — SQL Server
+Tabela: LogProcessamentoUsuario
+Campo	Descrição
+Id	Guid
+Data	Data/hora do processamento
+Payload	JSON da mensagem
+Status	Sucesso, Erro, DLQ
+Erro	Mensagem detalhada
+Tentativas	Número de retries
+🟦 8. Integrações Externas
+📡 API de Notificações
+
+Método: POST
+Endpoint: /api/v1/notificacoes/email
+Finalidade: Enviar e-mail de boas-vindas
+
+Request:
+
+{
+  "destinatario": "email",
+  "assunto": "Bem-vindo",
+  "mensagem": "Seu cadastro foi concluído com sucesso."
+}
+
+🟦 9. Critérios de Aceitação
+
+ O microserviço deve consumir mensagens do topic usuarios.cadastro.v1.
+
+ Deve validar dados obrigatórios.
+
+ Deve gravar o novo usuário no banco interno.
+
+ Deve chamar a API de Notificações após o cadastro.
+
+ Deve aplicar retry quando ocorrerem erros temporários.
+
+ Deve enviar mensagens inválidas para a DLQ.
+
+ Deve gerar logs de auditoria no SQL Server.
+
+ Deve possuir testes unitários e de integração.
+
+🟦 10. Definition of Ready (DoR)
+
+ Contrato da mensagem aprovado
+
+ Regras validadas com PO
+
+ Topic e DLQ criados ou aprovados
+
+ APIs externas disponíveis
+
+🟦 11. Definition of Done (DoD)
+
+ Tudo implementado e testado
+
+ Deploy realizado em Dev
+
+ Smoke test OK
+
+ Documentação final publicada
+
+🧱 TASKS DA USER STORY
+🟦 Task 1 — Análise Técnica
+
+Descrição: Estudar US, validar regras e identificar dependências.
+Critérios:
+
+ Fluxo validado
+
+ Dúvidas esclarecidas
+
+🟦 Task 2 — Definir Contrato da Mensagem
+
+Descrição: Criar/revisar schema JSON.
+Critérios:
+
+ Contrato publicado
+
+🟦 Task 3 — Configurar Topic e Consumer Group
+
+Descrição: Criar/verificar topic e grupo.
+Critérios:
+
+ Configuração validada
+
+🟦 Task 4 — Implementar Consumer (.NET 8)
+
+Descrição: Criar classe de consumo + parsing inicial.
+Critérios:
+
+ Consumer funcional
+
+🟦 Task 5 — Implementar Regras de Negócio
+
+Descrição: Validações, lógica e persistência.
+Critérios:
+
+ Cadastro funcionando
+
+🟦 Task 6 — Criar Integração com API de Notificações
+
+Descrição: Implementar cliente HTTP + mapping.
+Critérios:
+
+ E-mail enviado com sucesso
+
+🟦 Task 7 — Implementar Retry e DLQ
+
+Descrição: Criar política de retry e envio para DLQ.
+Critérios:
+
+ Testes com erro temporário e permanente
+
+🟦 Task 8 — Implementar Logs no SQL Server
+
+Descrição: Criar tabela + gravação de logs.
+Critérios:
+
+ Logs persistidos
+
+🟦 Task 9 — Testes Unitários
+
+Descrição: Criar testes para regras e integrações mockadas.
+Critérios:
+
+ Cobertura mínima alcançada
+
+🟦 Task 10 — Testes de Integração
+
+Descrição: Testar fluxo real com topic Kafka e API externa.
+Critérios:
+
+ Fluxo ponta a ponta funcionando
+
+🟦 Task 11 — Documentação Final
+
+Descrição: Atualizar documentação técnica e exemplos.
+Critérios:
+
+ Documento publicado
+
+🟦 Task 12 — Deploy + Smoke Test
+
+Descrição: Realizar deploy e validar mínimas funcionalidades.
+Critérios:
+
+ Deploy bem-sucedido
+
+ Sem falhas críticas

@@ -1,0 +1,153 @@
+﻿# 🧩 User Story — Microserviço [Nome do Microserviço]
+
+---
+
+## 🟦 1. Propósito do Microserviço
+> *(Explique em linguagem natural o objetivo do microserviço e qual necessidade de negócio ele atende. Ex.: “Este microserviço deve processar solicitações de cadastro enviadas pelo portal e garantir que os dados sigam para o sistema interno.”)*
+
+---
+
+## 🟦 2. História (formato PO)
+**Como** [usuário/área impactada]  
+**Quero** [ação ou necessidade]  
+**Para** [benefício ou resultado esperado]
+
+---
+
+## 🟦 3. Fluxo de Alto Nível (não técnico)
+> *(Descreva o fluxo narrativo: o que chega, o que deve acontecer, o que deve ser devolvido, e quais sistemas se beneficiam do processamento.)*
+
+Exemplo de preenchimento:
+- *(Mensagem recebida informando X)*
+- *(Microserviço processa e valida Y)*
+- *(Resultado segue para Z)*
+
+---
+
+# 🟦 4. Detalhes Técnicos do Evento (Kafka)
+
+### **🎯 Topic a ser consumido**
+- **topic:** `[preencher]`
+
+### **🎯 Grupo de consumo**
+- **consumer group:** `[preencher]`
+
+### **📌 Formato da mensagem**
+> *(Descrição ou link para o contrato da mensagem — JSON, AVRO, Protobuf etc.)*
+
+---
+
+# 🟦 5. Regras de Processamento da Mensagem
+*(Linguagem de negócio, não técnica)*  
+- *(O que precisa ser validado)*
+- *(Quais condições devem impedir o processamento)*
+- *(Quais cálculos, verificações ou decisões devem ocorrer)*
+
+---
+
+# 🟦 6. Comportamento de Erro e Resiliência
+
+### **🔁 Estratégia de Retry**
+- **Nº máximo de tentativas:** `[preencher]`
+- **Intervalo entre tentativas:** `[preencher]`
+- **Condições em que o retry deve ocorrer:**  
+  - *(ex.: falha temporária em API externa)*  
+  - *(ex.: timeout na validação)*
+
+---
+
+### **📥 DLQ (Dead Letter Queue)**
+- **Enviar para DLQ se:**  
+  - *(mensagem inválida)*  
+  - *(campo obrigatório ausente)*  
+  - *(erro permanente que não será corrigido por retry)*
+
+- **Topic DLQ:** `[preencher]`
+
+---
+
+# 🟦 7. Logs e Observabilidade
+
+### **🧾 Log de execução**
+O microserviço deve registrar:
+- Evento recebido
+- Status do processamento
+- Mensagens de erro
+- Tempo de execução
+- Informações relevantes para auditoria
+
+### **🗄 Log no SQL Server**
+- **Tabela:** `[nome da tabela]`
+- **Campos mínimos:**  
+  - `Id`  
+  - `DataProcessamento`  
+  - `Evento`  
+  - `Status`  
+  - `Erro`  
+  - `Payload` *(se aplicável)*  
+
+---
+
+# 🟦 8. Integrações com Outras APIs
+Liste aqui as chamadas que o microserviço precisa fazer:
+
+### **API 1 — [Nome]**
+- **Propósito da chamada:**  
+  *(Ex.: validar dados, buscar informações, atualizar status)*  
+- **Método:** `[GET/POST/PUT]`  
+- **URL base:** `[preencher]`  
+- **Contrato esperado:**  
+  - Request: `[link ou descrição]`  
+  - Response: `[link ou descrição]`  
+
+### **API 2 — [Nome]**
+*(repita conforme necessário)*
+
+---
+
+# 🟦 9. Critérios de Aceitação
+- [ ] O microserviço deve consumir mensagens do topic informado.  
+- [ ] Deve validar todas as regras de negócio antes do processamento.  
+- [ ] Mensagens com falha temporária devem passar por retry.  
+- [ ] Mensagens com falha permanente devem ser enviadas à DLQ.  
+- [ ] Todos os processamentos devem ser registrados em log (arquivo e banco).  
+- [ ] O microserviço deve chamar as APIs externas definidas.  
+- [ ] As respostas das APIs devem ser tratadas adequadamente.  
+- [ ] Em caso de indisponibilidade, o microserviço deve tentar novamente conforme política de retry.  
+- [ ] Fluxos alternativos devem estar cobertos por logs e evidências.  
+
+---
+
+# 🟦 10. Dependências
+- *(Topics Kafka que precisam existir)*  
+- *(APIs externas que devem estar disponíveis)*  
+- *(Chaves de autenticação / secrets)*  
+- *(Times envolvidos)*  
+
+---
+
+# 🟦 11. Riscos / Cuidados
+- *(Possíveis indisponibilidades de APIs externas)*  
+- *(Volume de mensagens maior que o previsto)*  
+- *(Dados sensíveis no payload)*  
+
+---
+
+# 🟦 12. Definition of Ready (DoR)
+- [ ] Fluxo de negócio totalmente claro  
+- [ ] Contrato da mensagem definido  
+- [ ] Regras de retry acordadas  
+- [ ] Topic e consumer group definidos  
+- [ ] Integrações mapeadas  
+- [ ] Critérios de aceitação revisados com o PO  
+
+---
+
+# 🟦 13. Definition of Done (DoD)
+- [ ] Critérios de aceitação cumpridos  
+- [ ] Log gravado e validado  
+- [ ] Processamento validado via testes reais de fila  
+- [ ] DLQ funcionando  
+- [ ] Observabilidade funcionando  
+- [ ] Documentação atualizada  
+- [ ] Validação final com o PO  

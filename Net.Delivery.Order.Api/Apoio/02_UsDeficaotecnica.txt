@@ -1,0 +1,319 @@
+﻿# 🧩 TEMPLATE COMPLETO — DOCUMENTAÇÃO DE MICROSSERVIÇOS  
+### (.NET 8 • C# • Kafka • Retry • DLQ • Logs • Integrações)
+
+---
+
+# 📘 1. USER STORY — Microserviço [Nome do Microserviço]
+
+## 🟦 1.1. Propósito do Microserviço
+> *(Explique em linguagem natural o objetivo do microserviço e qual necessidade de negócio ele atende.)*
+
+---
+
+## 🟦 1.2. História (formato PO)
+**Como** [usuário/área]  
+**Quero** [ação]  
+**Para** [benefício]
+
+---
+
+## 🟦 1.3. Fluxo de Alto Nível (não técnico)
+> *(Descreva o fluxo narrativo da mensagem ao resultado final.)*
+
+Exemplo de estrutura:
+- Mensagem chega ao microserviço  
+- Realiza validação lógica  
+- Consulta APIs externas  
+- Grava resultado  
+- Retorna sucesso ou falha  
+
+---
+
+## 🟦 1.4. Regras de Negócio (não técnicas)
+- *(Liste aqui todas as regras e condições de negócio que devem ser aplicadas.)*
+
+---
+
+## 🟦 1.5. Critérios de Aceitação
+- [ ] Consumir o evento do Kafka  
+- [ ] Validar regras de negócio  
+- [ ] Aplicar retry em falhas temporárias  
+- [ ] Enviar mensagem inválida para DLQ  
+- [ ] Registrar logs completos da execução  
+- [ ] Chamar APIs externas conforme necessidade  
+- [ ] Confirmar persistência no SQL Server  
+- [ ] Garantir rastreabilidade da mensagem  
+
+---
+
+## 🟦 1.6. Dependências
+- Topics Kafka  
+- APIs externas  
+- Tabelas no SQL Server  
+- Secrets no Key Vault  
+- Times envolvidos  
+
+---
+
+## 🟦 1.7. Riscos
+- Indisponibilidade de APIs externas  
+- Erros não recuperáveis no payload  
+- Alto volume de mensagens  
+- Possíveis falhas de conexão  
+
+---
+
+## 🟦 1.8. Definition of Ready (DoR)
+- [ ] Fluxo de negócio entendido  
+- [ ] Contrato da mensagem definido  
+- [ ] Integrações identificadas  
+- [ ] Critérios de aceitação claros  
+- [ ] Dependências mapeadas  
+
+---
+
+## 🟦 1.9. Definition of Done (DoD)
+- [ ] Todos os critérios atendidos  
+- [ ] Logs funcionais e auditáveis  
+- [ ] DLQ validada  
+- [ ] Retry implementado  
+- [ ] Integrações testadas  
+- [ ] Observabilidade configurada  
+- [ ] Documentação atualizada  
+
+---
+
+# 🛠 2. DOCUMENTAÇÃO TÉCNICA — Microserviço [Nome do Microserviço]
+
+---
+
+## 🔹 2.1. Arquitetura e Objetivo Técnico
+> *(Descrição técnica do escopo do microserviço.)*
+
+- Linguagem: **.NET 8 / C#**
+- Estilo: **Microservice + Event-driven**
+- Padrões: Clean Architecture, DDD (opcional), Outbox (opcional)
+
+---
+
+## 🔹 2.2. Estrutura do Projeto
+
+```plaintext
+/src
+  /Application
+  /Domain
+  /Infrastructure
+  /Consumers
+  /Producers
+  /Controllers
+  /Services
+/tests
+  /Unit
+  /Integration
+
+  🔹 2.3. Kafka — Contratos de Consumo
+Topic
+
+topic: [preencher]
+
+consumer group: [preencher]
+
+mensagem: [JSON | AVRO | Protobuf]
+
+Contrato
+{
+  "id": "string",
+  "evento": "string",
+  "data": "string",
+  "payload": {
+    // campos internos
+  }
+}
+
+Validações obrigatórias
+
+[campo obrigatório]
+
+[regra técnica]
+
+🔹 2.4. Pipeline Técnico do Consumidor
+
+Receber mensagem
+
+Validar contrato
+
+Criar correlationId
+
+Registrar log inicial
+
+Executar regras de negócio
+
+Integrar com APIs externas
+
+Persistir informações
+
+Registrar log de saída
+
+Commit da mensagem
+
+🔹 2.5. Retry e DLQ
+Retry
+
+Nº de tentativas: [preencher]
+
+Backoff: [linear/exponencial]
+
+Ferramenta: [Polly / Kafka config]
+
+DLQ
+
+topic DLQ: [preencher]
+
+Enviar para DLQ quando:
+
+Mensagem inválida
+
+Erro permanente
+
+Todas as tentativas de retry falharem
+
+🔹 2.6. Logs e Observabilidade
+Padrão
+
+CorrelationId
+
+Payload (sanitizado)
+
+Tempo de processamento
+
+Resultado (success/fail)
+
+Stacktrace em caso de erro
+
+Persistência no SQL Server
+
+Tabela sugerida:
+
+CREATE TABLE LogEventos (
+    Id UNIQUEIDENTIFIER NOT NULL,
+    DataProcessamento DATETIME2 NOT NULL,
+    Evento VARCHAR(200),
+    Status VARCHAR(50),
+    Erro TEXT,
+    Payload TEXT,
+    PRIMARY KEY (Id)
+);
+
+🔹 2.7. Integrações com APIs Externas
+API [Nome]
+
+Método: [GET/POST/PUT]
+
+URL: [preencher]
+
+Autenticação: [Bearer / Key]
+
+Retry: [sim/não]
+
+Timeout: [preencher]
+
+Request
+
+{
+  // preencher
+}
+
+
+Response
+
+{
+  // preencher
+}
+
+🔹 2.8. Configurações e Secrets
+
+appsettings.json
+
+{
+  "Kafka": {
+    "BootstrapServers": "",
+    "Topic": "",
+    "GroupId": "",
+    "DLQTopic": ""
+  },
+  "ConnectionStrings": {
+    "SqlServer": ""
+  }
+}
+
+
+Gerenciamento de Secrets
+
+Azure Key Vault / AWS Secrets Manager / Vault
+
+🔹 2.9. Métricas e Monitoramento
+
+mensagens processadas
+
+erros totais
+
+envios à DLQ
+
+tempo médio de processamento
+
+latência das APIs externas
+
+Ferramentas:
+
+OpenTelemetry
+
+Prometheus + Grafana
+
+🔹 2.10. Testes
+Unitários
+
+Regras de negócio
+
+Validação de contrato
+
+Fluxos alternativos
+
+Integração
+
+Consumo real do topic
+
+Persistência no banco
+
+DLQ funcionando
+
+End-to-End
+
+Kafka → Microserviço → API externa → Log → Resultado
+
+🔹 2.11. Diagrama Técnico
+flowchart LR
+    K(Kafka Topic) --> C(Microservice Consumer)
+    C --> V[Validações]
+    V --> A[Chamada API Externa]
+    A --> DB[(SQL Server Logs)]
+    V -->|erro permanente| DLQ(Dead Letter Queue)
+
+🔹 2.12. Checklist Técnico
+
+ Topic criado
+
+ Consumer group configurado
+
+ Retry implementado
+
+ DLQ criada e validada
+
+ Tabela de logs criada
+
+ APIs externas configuradas
+
+ Secrets configurados
+
+ Observabilidade ativada
+
+ Testes executados
