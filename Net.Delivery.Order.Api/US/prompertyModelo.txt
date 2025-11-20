@@ -1,0 +1,28 @@
+﻿
+Preciso criar um US [para solicitação de Formalização LIVENESS] 
+escrever como PO não técnico:
+onde: 
+1º será enviada uma mensagem de formalização via request de uma api externa [api-assessorias] para micro-services [api-formalizacao] terá endpoint para  mensagem referente formalizacao
+2º [api-formalizacao] processa o request recebido, grava log no sql server das informações recebida
+3º [api-formalizacao] envia um request para o produtor de mensagem [api-pdc-formalizar] contendo as informações da mensagem de formalização recebida
+4º o produtor de mensagem [api-pdc-formalizar]e publica mensagem no topic [tp-formalizar] e groupo consumer [gc-formalizar] do Kafka, 
+5º Kafka precisa está configurado com [groupo consumer] e [topic] para receber a mensagem
+6º a [api-csm-formalizacao] vai consumir mensagem do Kafka referente ao topic [tp-formalizar] e groupo consumer [gc-formalizar]
+	processa-la com retray de 3 tentativas, gravar log no sql server da mensagem recebida se não conseguir processa-la colocar DLQ [dlq-formalizar] 
+	* definir regras para validação da mensagem que possa colocar em DLQ por falta de parâmetros necessários o mal formatada	
+7º a api consumer [api-csm-formalizacao] em caso de sucesso faz request na api externa[api-formalizacao-corp] que tem endpoint espercifico para receberar a mensagem
+	 * definir payload da mensagem e enviará para [api-notificacao] e publicará mensagem no kafka com passando o status ok no topic [tp-formalizado] e groupo consumer [gc-formalizado] 
+	 {obs: os passo da api externa[api-formalizacao-corp] não precisa ser detalhados apenas citados já que será feita por sistema externo}
+8º api consumer[api-csm-formalizado] vai processar mensagem retray de 3 tentativas gravar log no sql server da mensagem recebida se não colocar DLQ [dlq-formalizado]
+	envia uma mensagem para micro-services [api-formalizacao] com status de ok para endpoint que recebe mensagem referente formalizacao	
+8º [api-formalizacao] processa o request recebido, grava log no sql server das informações recebida
+9º [api-formalizacao] envia um request para o produtor de mensagem [api-pdc-formalizar] contendo as informações da mensagem de formalização recebida com status de ok
+10º o produtor de mensagem [api-pdc-formalizar]e publica mensagem no topic [tp-aprovar-acordo] e groupo consumer [gc-aprovar-acordo] do Kafka, 
+
+Pontos que preciso descrever na US:
+	Description
+	Objetivo do negócio
+	Necessidade do negócio
+	Regras de negócio
+	Criterios de aceite
+	Criterios de conclusão(DoD / DoD)
